@@ -151,6 +151,21 @@ final class SystemNotificationManager: ObservableObject {
             body: nonEmpty(payload["body"]),
             receivedAt: Date()
         )
+        // Claude/Codex avisando ("precisa de permissão", "terminou"): o módulo de agentes mostra isso
+        // melhor (cartão de aprovação, resumo). Espera um instante para os hooks chegarem e só
+        // mostra a notificação se o boringCode não estiver acompanhando essa sessão.
+        if Defaults[.agentsEnabled], Self.isFromAIAgent(notification) {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !AgentSessionStore.shared.handlesAgentNotifications else { return }
+                self?.deliver(notification)
+            }
+            return
+        }
+        deliver(notification)
+    }
+
+    private func deliver(_ notification: SystemNotification) {
         guard isAllowed(notification) else { return }
         guard activeNotification == nil else {
             guard isUserPresent else {
@@ -184,6 +199,25 @@ final class SystemNotificationManager: ObservableObject {
     private func promoteNext() {
         guard activeNotification == nil, !queuedNotifications.isEmpty else { return }
         show(queuedNotifications.removeFirst())
+    }
+
+    /// A notificação veio de um agente de IA: do app Claude/Codex, ou de um terminal/editor
+    /// (onde rodam o Claude Code e o Codex CLI) falando de Claude/Codex.
+    nonisolated static func isFromAIAgent(_ notification: SystemNotification) -> Bool {
+        let agentApps: Set<String> = ["com.anthropic.claudefordesktop", "com.openai.codex"]
+        if let bundleID = notification.bundleID, agentApps.contains(bundleID) { return true }
+        let appName = (notification.appName ?? "").lowercased()
+        if appName == "claude" || appName == "codex" { return true }
+
+        let hosts: Set<String> = [
+            "com.apple.Terminal", "com.googlecode.iterm2", "com.microsoft.VSCode", "com.microsoft.VSCodeInsiders",
+            "com.todesktop.230313mzl4w4u92", "com.mitchellh.ghostty", "dev.warp.Warp-Stable", "net.kovidgoyal.kitty",
+            "com.github.wez.wezterm", "dev.zed.Zed",
+        ]
+        guard let bundleID = notification.bundleID, hosts.contains(bundleID) else { return false }
+        let text = [notification.title, notification.subtitle, notification.body]
+            .compactMap { $0 }.joined(separator: " ").lowercased()
+        return text.contains("claude") || text.contains("codex")
     }
 
     func updateFilter() {

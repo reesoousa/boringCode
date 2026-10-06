@@ -29,6 +29,16 @@ final class AgentSessionStore: ObservableObject {
     @Published private(set) var finishRequest: AgentFinishRequest?
     /// Sessão mostrada no cartão grande da aba (escolhida na lista, ou a que acabou de terminar).
     @Published var selectedSessionID: String?
+    /// Último evento de hook recebido (não publicado: só para decidir sobre notificações).
+    private var lastHookEventAt: Date?
+
+    /// O boringCode já está acompanhando os agentes agora (pedido pendente ou hook recente):
+    /// a notificação do sistema do Claude/Codex sobre isso é redundante e dá lugar ao cartão.
+    var handlesAgentNotifications: Bool {
+        guard Defaults[.agentsEnabled] else { return false }
+        if pendingApprovalCount > 0 { return true }
+        return lastHookEventAt.map { Date().timeIntervalSince($0) < 8 } ?? false
+    }
 
     private let server = AgentHookServer()
     private var pendingConnections: [UUID: AgentHookConnection] = [:]
@@ -232,6 +242,7 @@ final class AgentSessionStore: ObservableObject {
             return
         }
 
+        lastHookEventAt = Date()
         let agent = AgentKind(pathComponent: request.agent)
         // O app do Codex dispara hooks internos (ex.: gerar título) sem transcript — não são sessões.
         if agent == .codex, (payload.transcriptPath ?? "").isEmpty {

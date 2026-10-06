@@ -954,11 +954,12 @@ extension ContentView {
     }
 
     /// Pedido de aprovação chegou: abre o notch na aba de agentes (só na tela principal).
+    /// Tem prioridade sobre uma notificação na tela (que continua na Central de Notificações).
     private func expandForAgentApproval() {
         guard Defaults[.agentsEnabled], Defaults[.agentsExpandOnApproval],
               vm.screenUUID == coordinator.selectedScreenUUID,
-              notificationManager.activeNotification == nil,
               !coordinator.firstLaunch else { return }
+        if notificationManager.activeNotification != nil { notificationManager.dismissActive() }
 
         if vm.notchState == .closed {
             coordinator.currentView = .agents
@@ -971,6 +972,10 @@ extension ContentView {
     /// Um agente terminou (ou parou com erro): abre o notch no cartão com o resumo e fecha
     /// sozinho uns segundos depois, se você não pegou o notch. Aberto em outra aba, não interrompe.
     private func showAgentFinish(_ request: AgentFinishRequest) {
+        // Uma notificação do próprio agente sai da frente; a de outro app tem prioridade.
+        if let active = notificationManager.activeNotification, SystemNotificationManager.isFromAIAgent(active) {
+            notificationManager.dismissActive()
+        }
         guard Defaults[.agentsEnabled], Defaults[.agentsOpenOnFinish],
               vm.screenUUID == coordinator.selectedScreenUUID,
               notificationManager.activeNotification == nil,
