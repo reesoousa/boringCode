@@ -141,7 +141,71 @@ struct AgentPermissionRequest: Equatable {
     let toolName: String
     /// Resumo legível do que será executado (comando, arquivo, URL…).
     let summary: String
+    var kind: AgentStepKind = .other
+    /// Alvo curto (arquivo, domínio, ferramenta MCP).
+    var target: String?
+    /// Descrição que o agente deu ("Roda as migrações do banco").
+    var note: String?
+    /// Texto da caixa de código: comando inteiro (até 4000 caracteres), URL inteira, começo do plano.
+    var detail: String?
+    var added: Int?
+    var removed: Int?
+    /// Regras de `permission_suggestions` que o "Sempre permitir" grava (`updatedPermissions`).
+    /// Só entram `addRules` de permitir: mudar de modo ou liberar pastas fica no terminal.
+    var suggestions: Data?
+    /// As mesmas regras em texto ("Bash(npm test:*)"), mostradas antes de você aceitar.
+    var alwaysAllowRules: [String] = []
     let receivedAt: Date
+
+    var canAlwaysAllow: Bool { suggestions != nil && !alwaysAllowRules.isEmpty && kind != .planning }
+
+    /// Fica só com as sugestões seguras de mostrar e gravar: `addRules` com `behavior: allow`.
+    static func allowRuleSuggestions(_ raw: [Any]) -> (data: Data, rules: [String])? {
+        var kept: [[String: Any]] = []
+        var texts: [String] = []
+        for case let suggestion as [String: Any] in raw {
+            guard suggestion["type"] as? String == "addRules",
+                  suggestion["behavior"] as? String == "allow",
+                  let rules = suggestion["rules"] as? [[String: Any]], !rules.isEmpty else { continue }
+            let ruleTexts = rules.compactMap { rule -> String? in
+                guard let tool = rule["toolName"] as? String, !tool.isEmpty else { return nil }
+                if let content = rule["ruleContent"] as? String, !content.isEmpty { return "\(tool)(\(content))" }
+                return tool
+            }
+            guard ruleTexts.count == rules.count else { continue }
+            kept.append(suggestion)
+            texts += ruleTexts
+        }
+        guard !kept.isEmpty, let data = try? JSONSerialization.data(withJSONObject: kept) else { return nil }
+        return (data, texts)
+    }
+
+    /// "Claude quer rodar um comando", "Claude quer editar um arquivo"…
+    func headline(agent: AgentKind) -> String {
+        let name = agent.displayName
+        switch kind {
+        case .running, .testing, .building, .git:
+            return String(localized: "\(name) wants to run a command", comment: "Agent permission headline")
+        case .editing:
+            return String(localized: "\(name) wants to edit a file", comment: "Agent permission headline")
+        case .writing:
+            return String(localized: "\(name) wants to create a file", comment: "Agent permission headline")
+        case .reading:
+            return String(localized: "\(name) wants to read a file", comment: "Agent permission headline")
+        case .searching:
+            return String(localized: "\(name) wants to search", comment: "Agent permission headline")
+        case .web:
+            return String(localized: "\(name) wants to access the web", comment: "Agent permission headline")
+        case .planning:
+            return String(localized: "\(name) has a plan ready", comment: "Agent permission headline: ExitPlanMode")
+        case .delegating:
+            return String(localized: "\(name) wants to start a subagent", comment: "Agent permission headline")
+        case .mcp:
+            return String(localized: "\(name) wants to use a tool", comment: "Agent permission headline: MCP tool")
+        default:
+            return String(localized: "\(name) needs permission", comment: "Agent permission headline")
+        }
+    }
 }
 
 /// Uma pergunta do AskUserQuestion do Claude Code.
@@ -195,7 +259,9 @@ struct AgentSession: Identifiable, Equatable {
     let id: String
     var agent: AgentKind = .claude
     var cwd: String
-    var status: AgentSessionStatus
+    var status: AgentSessionStatus {
+        didSet { if status != oldValue { statusChangedAt = Date() } }
+    }
     var host: AgentHost
     var tty: String?
     /// PID do processo `claude` — usado para detectar sessões que morreram sem SessionEnd.
@@ -211,6 +277,27 @@ struct AgentSession: Identifiable, Equatable {
     var updatedAt: Date
 
     var pendingQuestion: AgentPendingQuestion?
+
+    /// Passos do turno atual (mais antigo primeiro), no máximo `maxSteps`.
+    var steps: [AgentStep] = []
+    /// Resumo da última resposta do agente (primeiro parágrafo do `last_assistant_message`).
+    var lastMessage: String?
+    /// Quando o prompt atual foi enviado — conta o tempo do turno.
+    var turnStartedAt: Date?
+    /// Quando o status mudou pela última vez (o mascote reage à mudança).
+    var statusChangedAt: Date = .distantPast
+    /// O cartão de "terminou"/"erro" já foi visto (OK) — a aba volta aos passos.
+    var outcomeAcknowledged = false
+
+    static let maxSteps = 12
+
+    var currentStep: AgentStep? { steps.last(where: { $0.state == .running }) }
+
+    /// O que o mascote está fazendo agora.
+    var motionKind: AgentStepKind {
+        if status == .running, let step = currentStep { return step.kind }
+        return .thinking
+    }
 
     var pendingPermission: AgentPermissionRequest? { pendingPermissions.first }
 
@@ -231,6 +318,12 @@ struct AgentSession: Identifiable, Equatable {
     }
 }
 
+/// Um turno terminou: o notch abre no cartão dessa sessão.
+struct AgentFinishRequest: Equatable {
+    let id: UUID
+    let sessionID: String
+}
+
 // MARK: - Payload dos hooks
 
 /// Subconjunto do JSON que o Claude Code manda no stdin de cada hook.
@@ -246,6 +339,8 @@ struct ClaudeHookPayload: Decodable {
     let notificationType: String?
     let error: String?
     let errorDetails: String?
+    let toolUseID: String?
+    let lastAssistantMessage: String?
 
     enum CodingKeys: String, CodingKey {
         case sessionID = "session_id"
@@ -258,6 +353,8 @@ struct ClaudeHookPayload: Decodable {
         case notificationType = "notification_type"
         case error
         case errorDetails = "error_details"
+        case toolUseID = "tool_use_id"
+        case lastAssistantMessage = "last_assistant_message"
     }
 }
 

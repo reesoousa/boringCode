@@ -32,6 +32,11 @@ struct AgentsSettingsView: View {
                     Text("Open the notch when an agent needs approval")
                 }
                 .disabled(!agentsEnabled)
+                Defaults.Toggle(key: .agentsOpenOnFinish) {
+                    Text("Open the notch when an agent finishes")
+                    Text("Shows a summary of what it did for a few seconds, then closes.")
+                }
+                .disabled(!agentsEnabled)
                 Defaults.Toggle(key: .agentsCompletionSound) {
                     Text("Play a subtle sound when an agent finishes")
                 }
@@ -46,7 +51,7 @@ struct AgentsSettingsView: View {
             } header: {
                 Text("General")
             } footer: {
-                Text("While an agent is running, its status replaces the audio spectrum on the right side of the notch.")
+                Text("While an agent is running, its mascot replaces the audio spectrum on the right side of the notch.")
                     .foregroundStyle(.secondary)
                     .font(.caption)
             }
@@ -70,7 +75,8 @@ struct AgentsSettingsView: View {
                 } else {
                     ForEach(store.sessions) { session in
                         HStack(spacing: 8) {
-                            AgentStatusIndicator(status: session.status, size: 14)
+                            AgentMascot(agent: session.agent, status: session.status, motion: session.motionKind.motion)
+                                .frame(width: 27, height: 15)
                             Text(session.projectName)
                             Text(session.hostLabel)
                                 .foregroundStyle(.secondary)

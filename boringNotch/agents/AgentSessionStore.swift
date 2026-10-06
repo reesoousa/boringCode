@@ -25,6 +25,10 @@ final class AgentSessionStore: ObservableObject {
     @Published private(set) var expandRequest: UUID?
     /// Última vez que uma sessão terminou (Stop) — o indicador mostra um ✓ rápido.
     @Published private(set) var lastCompletion: Date?
+    /// Muda quando um turno termina (ou falha) — o notch abre no cartão com o resumo.
+    @Published private(set) var finishRequest: AgentFinishRequest?
+    /// Sessão mostrada no cartão grande da aba (escolhida na lista, ou a que acabou de terminar).
+    @Published var selectedSessionID: String?
 
     private let server = AgentHookServer()
     private var pendingConnections: [UUID: AgentHookConnection] = [:]
@@ -32,8 +36,10 @@ final class AgentSessionStore: ObservableObject {
     private var enabledCancellable: AnyCancellable?
     private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "boringcode", category: "AgentSessionStore")
 
-    /// Por quanto tempo o ✓ de "concluído" fica no notch fechado.
+    /// Por quanto tempo o ✓ de "concluído" (e o aviso com o resumo) fica no notch fechado.
     static let completionFlashDuration: TimeInterval = 5
+    /// Por quanto tempo o cartão de "terminou" fica aberto sozinho.
+    static let finishDisplayDuration: TimeInterval = 5
 
     private init() {
         server.onRequest = { [weak self] request, connection in
@@ -131,6 +137,11 @@ final class AgentSessionStore: ObservableObject {
         activeSessions.max(by: { $0.status.priority < $1.status.priority })?.agent ?? sessions.first?.agent ?? .claude
     }
 
+    /// Sessão que o notch fechado representa (a mais urgente; senão a mais recente).
+    var closedIndicatorSession: AgentSession? {
+        activeSessions.max(by: { $0.status.priority < $1.status.priority }) ?? sessions.first
+    }
+
     /// O que o indicador do notch fechado deve mostrar (nil = nada, volta o espectro).
     var closedIndicatorStatus: AgentSessionStatus? {
         if let top = activeSessions.max(by: { $0.status.priority < $1.status.priority }) {
@@ -144,9 +155,26 @@ final class AgentSessionStore: ObservableObject {
 
     // MARK: - Ações
 
-    func approve(_ sessionID: String) { resolveFirstPermission(of: sessionID, allow: true) }
+    /// Aprova/recusa um pedido específico: se o pedido da frente já não for o que você viu
+    /// (respondido no terminal e trocado por outro), não faz nada.
+    func approve(_ sessionID: String, permissionID: UUID) {
+        resolveFirstPermission(of: sessionID, expected: permissionID, allow: true)
+    }
 
-    func deny(_ sessionID: String) { resolveFirstPermission(of: sessionID, allow: false) }
+    func deny(_ sessionID: String, permissionID: UUID) {
+        resolveFirstPermission(of: sessionID, expected: permissionID, allow: false)
+    }
+
+    /// Permite e pede ao Claude Code para lembrar a regra (as sugestões do próprio pedido).
+    func approveAlways(_ sessionID: String, permissionID: UUID) {
+        resolveFirstPermission(of: sessionID, expected: permissionID, allow: true, always: true)
+    }
+
+    /// "OK" no cartão de terminou/erro: a aba volta a mostrar os passos.
+    func acknowledgeOutcome(_ sessionID: String) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        sessions[index].outcomeAcknowledged = true
+    }
 
     /// Responde o AskUserQuestion: `answers` = texto da pergunta → rótulo(s) escolhido(s).
     func answer(_ sessionID: String, answers: [String: String]) {
@@ -186,6 +214,14 @@ final class AgentSessionStore: ObservableObject {
         guard let session = sessions.first(where: { $0.id == sessionID }), !session.status.isActive else { return }
         sessions.removeAll { $0.id == sessionID }
     }
+
+    #if DEBUG
+    /// Só para testes/capturas: troca as sessões sem passar pelos hooks.
+    func replaceSessionsForPreview(_ sessions: [AgentSession], lastCompletion: Date? = nil) {
+        self.sessions = sessions
+        self.lastCompletion = lastCompletion
+    }
+    #endif
 
     // MARK: - Eventos
 
@@ -228,6 +264,10 @@ final class AgentSessionStore: ObservableObject {
             session.lastPrompt = payload.prompt?.singleLine
             session.activity = nil
             session.errorMessage = nil
+            session.steps = []
+            session.lastMessage = nil
+            session.turnStartedAt = now
+            session.outcomeAcknowledged = false
         case "PreToolUse":
             if !session.pendingPermissions.isEmpty {
                 session.status = .waitingApproval
@@ -237,10 +277,22 @@ final class AgentSessionStore: ObservableObject {
                 session.status = .running
             }
             session.activity = payload.toolSummary
+            if session.turnStartedAt == nil { session.turnStartedAt = now }
+            finishSteps(of: &session, kind: .compacting)
+            if let toolName = payload.toolName {
+                let id = payload.toolUseID ?? UUID().uuidString
+                if !session.steps.contains(where: { $0.id == id }) {
+                    session.steps.append(AgentStepParser.step(id: id, toolName: toolName, input: payload.toolInput, at: now))
+                    if session.steps.count > AgentSession.maxSteps {
+                        session.steps.removeFirst(session.steps.count - AgentSession.maxSteps)
+                    }
+                }
+            }
         case "PostToolUse", "PostToolUseFailure", "PermissionDenied":
             // A ferramenta rodou (ou foi negada): qualquer pedido pendente dela já foi decidido.
             dropPermissions(of: &session)
             session.status = .running
+            markStep(of: &session, payload: payload, state: payload.hookEventName == "PostToolUse" ? .done : .failed)
         case "PermissionRequest":
             if payload.toolName == "AskUserQuestion",
                let toolInput = Self.rawToolInput(request.body),
@@ -263,14 +315,7 @@ final class AgentSessionStore: ObservableObject {
                 session.status = .waitingInput
                 session.activity = String(localized: "Question for you")
             } else {
-                let permission = AgentPermissionRequest(
-                    id: UUID(),
-                    toolName: payload.toolName ?? "Tool",
-                    summary: payload.toolName == "ExitPlanMode"
-                        ? String(localized: "Plan ready for review")
-                        : payload.toolDetail ?? "",
-                    receivedAt: now
-                )
+                let permission = Self.permissionRequest(payload: payload, body: request.body, agent: agent, at: now)
                 session.pendingPermissions.append(permission)
                 session.status = .waitingApproval
                 pendingConnections[permission.id] = connection
@@ -295,18 +340,28 @@ final class AgentSessionStore: ObservableObject {
             }
         case "Stop":
             // Só avisa se algo estava de fato em andamento (não num Stop repetido).
-            if session.status.isActive { AgentCompletionSound.play() }
+            let wasActive = session.status.isActive
+            if wasActive { AgentCompletionSound.play() }
             dropPermissions(of: &session)
             session.status = .done
             session.activity = nil
             session.subagents = 0
+            finishSteps(of: &session)
+            if let message = payload.lastAssistantMessage?.agentSummary, !message.isEmpty {
+                session.lastMessage = message
+            }
+            session.outcomeAcknowledged = false
             lastCompletion = now
             scheduleIndicatorRefresh()
+            if wasActive { requestFinish(session.id) }
         case "StopFailure":
             dropPermissions(of: &session)
             session.status = .error
             session.errorMessage = (payload.error ?? payload.errorDetails ?? String(localized: "API request failed")).singleLine
             session.subagents = 0
+            finishSteps(of: &session, as: .failed)
+            session.outcomeAcknowledged = false
+            requestFinish(session.id)
             lastCompletion = now
             scheduleIndicatorRefresh()
         case "SubagentStart":
@@ -316,6 +371,7 @@ final class AgentSessionStore: ObservableObject {
         case "PreCompact":
             session.status = .running
             session.activity = String(localized: "Compacting context")
+            session.steps.append(AgentStep(id: UUID().uuidString, kind: .compacting, target: nil, toolName: "PreCompact", startedAt: now))
         case "SessionEnd":
             dropPermissions(of: &session)
             sessions.removeAll { $0.id == session.id }
@@ -327,6 +383,14 @@ final class AgentSessionStore: ObservableObject {
 
         upsert(session)
         if !holdConnection { connection.respond(nil) }
+    }
+
+    /// Mostra no cartão a sessão que acabou de terminar e pede para o notch abrir.
+    private func requestFinish(_ sessionID: String) {
+        // Se outra sessão espera aprovação, o cartão é dela — não troca.
+        guard !sessions.contains(where: { $0.id != sessionID && $0.needsAnswer }) else { return }
+        selectedSessionID = sessionID
+        finishRequest = AgentFinishRequest(id: UUID(), sessionID: sessionID)
     }
 
     private func applyContext(_ headers: [String: String], to session: inout AgentSession) {
@@ -347,12 +411,18 @@ final class AgentSessionStore: ObservableObject {
 
     // MARK: - Permissões
 
-    private func resolveFirstPermission(of sessionID: String, allow: Bool) {
+    private func resolveFirstPermission(of sessionID: String, expected: UUID, allow: Bool, always: Bool = false) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
-              let permission = sessions[index].pendingPermission else { return }
-        let decision: [String: Any] = allow
+              let permission = sessions[index].pendingPermission,
+              permission.id == expected else { return }
+        var decision: [String: Any] = allow
             ? ["behavior": "allow"]
             : ["behavior": "deny", "message": "Denied by the user from the boringCode notch."]
+        // O Codex recusa updatedPermissions: lá "sempre" vira um "permitir" simples.
+        if allow, always, sessions[index].agent == .claude, let suggestions = permission.suggestions,
+           let rules = try? JSONSerialization.jsonObject(with: suggestions) {
+            decision["updatedPermissions"] = rules
+        }
         let output: [String: Any] = [
             "hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]
         ]
@@ -362,6 +432,75 @@ final class AgentSessionStore: ObservableObject {
         sessions[index].pendingPermissions.removeFirst()
         sessions[index].status = sessions[index].pendingPermissions.isEmpty ? .running : .waitingApproval
         sessions[index].updatedAt = Date()
+    }
+
+    /// Monta o pedido de permissão com o que dá para mostrar no cartão.
+    private static func permissionRequest(payload: ClaudeHookPayload, body: Data, agent: AgentKind, at date: Date) -> AgentPermissionRequest {
+        let toolName = payload.toolName ?? "Tool"
+        let (classified, shortTarget) = AgentStepParser.classify(toolName: toolName, input: payload.toolInput)
+        // Num pedido, o título vem da ferramenta, nunca do conteúdo do comando:
+        // "cat x && rm -rf y" é "rodar um comando", não "ler um arquivo".
+        let isShell = AgentStepParser.shellTools.contains(toolName)
+        let kind: AgentStepKind = isShell ? .running : classified
+        // Caminho completo (com ~): só o nome esconderia ~/.ssh/authorized_keys atrás de "authorized_keys".
+        let fullPath = (payload.toolInput?["file_path"] ?? payload.toolInput?["notebook_path"] ?? payload.toolInput?["path"])
+            .map { ($0 as NSString).abbreviatingWithTildeInPath }
+        let target = fullPath ?? shortTarget
+        let stats = AgentStepParser.diffStats(toolName: toolName, input: payload.toolInput)
+        var detail: String?
+        switch kind {
+        case .planning:
+            detail = payload.toolInput?["plan"]?.agentSummary
+        case .web:
+            detail = payload.toolInput?["url"] ?? payload.toolInput?["query"]
+        case .editing, .writing, .reading:
+            detail = nil
+        default:
+            if let command = payload.toolInput?["command"] {
+                // Inteiro: um comando cortado esconderia o que vem depois do trecho visível.
+                detail = command.clipped(4000)
+            } else {
+                detail = payload.toolDetail
+            }
+        }
+        var allowRules: (data: Data, rules: [String])?
+        if agent == .claude,
+           let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+           let raw = object["permission_suggestions"] as? [Any] {
+            allowRules = AgentPermissionRequest.allowRuleSuggestions(raw)
+        }
+        return AgentPermissionRequest(
+            id: UUID(),
+            toolName: toolName,
+            summary: toolName == "ExitPlanMode" ? String(localized: "Plan ready for review") : payload.toolDetail ?? "",
+            kind: kind,
+            target: target,
+            note: AgentStepParser.note(payload.toolInput),
+            detail: detail,
+            added: stats?.added,
+            removed: stats?.removed,
+            suggestions: allowRules?.data,
+            alwaysAllowRules: allowRules?.rules ?? [],
+            receivedAt: date
+        )
+    }
+
+    // MARK: - Passos
+
+    /// Fecha o passo da ferramenta que terminou (pelo `tool_use_id`; sem ele, o mais antigo da mesma ferramenta).
+    private func markStep(of session: inout AgentSession, payload: ClaudeHookPayload, state: AgentStepState) {
+        let index = payload.toolUseID.flatMap { id in session.steps.firstIndex(where: { $0.id == id }) }
+            ?? session.steps.firstIndex(where: { $0.state == .running && $0.toolName == payload.toolName })
+        guard let index else { return }
+        session.steps[index].state = state
+    }
+
+    /// Fecha os passos ainda abertos (fim do turno; o Codex não manda PostToolUse).
+    private func finishSteps(of session: inout AgentSession, kind: AgentStepKind? = nil, as state: AgentStepState = .done) {
+        for index in session.steps.indices where session.steps[index].state == .running
+            && (kind == nil || session.steps[index].kind == kind) {
+            session.steps[index].state = state
+        }
     }
 
     private func questionAbandoned(_ questionID: UUID, sessionID: String) {

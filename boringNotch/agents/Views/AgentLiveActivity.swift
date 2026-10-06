@@ -22,7 +22,7 @@ struct AgentLiveActivity: View {
 
     var body: some View {
         HStack {
-            AgentStatusIndicator(status: status, agent: store.closedIndicatorAgent, size: itemSize * 0.8)
+            AgentClosedMascot(status: status, size: itemSize)
                 .frame(width: itemSize, height: itemSize)
 
             Rectangle()
@@ -37,16 +37,35 @@ struct AgentLiveActivity: View {
     }
 }
 
+/// Mascote pequeno do notch fechado — a pose já diz o estado (acenando = precisa de você).
+struct AgentClosedMascot: View {
+    @ObservedObject private var store = AgentSessionStore.shared
+    let status: AgentSessionStatus
+    /// Lado do quadrado do slot (o mesmo do mini espectro).
+    let size: CGFloat
+
+    var body: some View {
+        let session = store.closedIndicatorSession
+        AgentMascot(
+            agent: session?.agent ?? store.closedIndicatorAgent,
+            status: status,
+            motion: session?.motionKind.motion ?? .idle,
+            statusChangedAt: session?.statusChangedAt ?? .distantPast
+        )
+        // 18×10 pt num notch comum: discreto, do tamanho dos outros ícones do notch.
+        .frame(width: size, height: size * 0.5)
+        .frame(width: size, height: size)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: status)
+    }
+}
+
 /// Lado direito do notch fechado com música tocando: entra no lugar do mini espectro.
 struct AgentClosedIndicator: View {
-    @ObservedObject private var store = AgentSessionStore.shared
     let status: AgentSessionStatus
     let size: CGFloat
 
     var body: some View {
-        AgentStatusIndicator(status: status, agent: store.closedIndicatorAgent, size: max(0, size * 0.8))
-            .frame(width: size, height: size)
-            .animation(.smooth(duration: 0.25), value: status)
+        AgentClosedMascot(status: status, size: size)
     }
 }
 

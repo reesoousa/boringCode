@@ -37,6 +37,8 @@ struct ContentView: View {
     @State private var isHoveringMusicArea = false
     /// O notch abriu sozinho por um pedido de aprovação — fecha sozinho quando resolver.
     @State private var autoOpenedForApproval = false
+    /// O notch abriu sozinho para mostrar que um agente terminou (fecha sozinho depois).
+    @State private var autoOpenedForFinish = false
     /// Notch aberto sozinho por um arquivo chegando pelo LocalSend.
     @State private var autoOpenedForReceive = false
     /// Notch aberto sozinho porque uma janela foi arrastada até ele.
@@ -438,6 +440,9 @@ struct ContentView: View {
         .background(dragDetector)
         .preferredColorScheme(.dark)
         .environmentObject(vm)
+        .onChange(of: agentStore.finishRequest) { _, request in
+            if let request { showAgentFinish(request) }
+        }
         .onChange(of: dropInteraction.anyDropZoneTargeting) { _, isTargeted in
             anyDropDebounceTask?.cancel()
 
@@ -963,6 +968,31 @@ extension ContentView {
         }
     }
 
+    /// Um agente terminou (ou parou com erro): abre o notch no cartão com o resumo e fecha
+    /// sozinho uns segundos depois, se você não pegou o notch. Aberto em outra aba, não interrompe.
+    private func showAgentFinish(_ request: AgentFinishRequest) {
+        guard Defaults[.agentsEnabled], Defaults[.agentsOpenOnFinish],
+              vm.screenUUID == coordinator.selectedScreenUUID,
+              notificationManager.activeNotification == nil,
+              !coordinator.firstLaunch, !vm.isPopoverActive else { return }
+
+        if vm.notchState == .closed {
+            coordinator.currentView = .agents
+            guard doOpen() else { return }
+            autoOpenedForFinish = !isHovering
+        } else if coordinator.currentView != .agents || isHovering {
+            return
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(AgentSessionStore.finishDisplayDuration))
+            // Algo novo pediu você (aprovação) ou você pegou o notch: fica aberto.
+            guard autoOpenedForFinish, agentStore.finishRequest == request, agentStore.pendingApprovalCount == 0,
+                  vm.notchState == .open, !isHovering, !vm.isPopoverActive else { return }
+            autoOpenedForFinish = false
+            vm.close()
+        }
+    }
+
     /// Chegou arquivo pelo LocalSend: abre no Shelf, onde ele vai aparecer (só na tela principal).
     private func expandForLocalSendReceive() {
         guard Defaults[.localSendOpenOnReceive], Defaults[.boringShelf],
@@ -1009,6 +1039,7 @@ extension ContentView {
         if hovering {
             // Você assumiu o notch: ele volta a fechar pelo hover normal.
             autoOpenedForApproval = false
+            autoOpenedForFinish = false
             autoOpenedForReceive = false
             withAnimation(animationSpring) {
                 isHovering = true
