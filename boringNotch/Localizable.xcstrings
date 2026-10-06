@@ -33412,6 +33412,416 @@
           }
         }
       }
+    },
+    "Thinking" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pensando"
+          }
+        }
+      }
+    },
+    "Reading" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lendo"
+          }
+        }
+      }
+    },
+    "Searching" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscando"
+          }
+        }
+      }
+    },
+    "Editing" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editando"
+          }
+        }
+      }
+    },
+    "Creating" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Criando"
+          }
+        }
+      }
+    },
+    "Testing" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testando"
+          }
+        }
+      }
+    },
+    "Building" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compilando"
+          }
+        }
+      }
+    },
+    "Git" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git"
+          }
+        }
+      }
+    },
+    "Browsing" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Na web"
+          }
+        }
+      }
+    },
+    "Delegating" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delegando"
+          }
+        }
+      }
+    },
+    "Planning" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Planejando"
+          }
+        }
+      }
+    },
+    "Asking" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perguntando"
+          }
+        }
+      }
+    },
+    "Using" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando"
+          }
+        }
+      }
+    },
+    "Working" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trabalhando"
+          }
+        }
+      }
+    },
+    "%@ wants to run a command" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer rodar um comando"
+          }
+        }
+      }
+    },
+    "%@ wants to edit a file" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer editar um arquivo"
+          }
+        }
+      }
+    },
+    "%@ wants to create a file" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer criar um arquivo"
+          }
+        }
+      }
+    },
+    "%@ wants to read a file" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer ler um arquivo"
+          }
+        }
+      }
+    },
+    "%@ wants to search" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer fazer uma busca"
+          }
+        }
+      }
+    },
+    "%@ wants to access the web" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer acessar a web"
+          }
+        }
+      }
+    },
+    "%@ has a plan ready" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ tem um plano pronto"
+          }
+        }
+      }
+    },
+    "%@ wants to start a subagent" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer iniciar um subagente"
+          }
+        }
+      }
+    },
+    "%@ wants to use a tool" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer usar uma ferramenta"
+          }
+        }
+      }
+    },
+    "%@ needs permission" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ precisa de permissão"
+          }
+        }
+      }
+    },
+    "%@ has a question" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ tem uma pergunta"
+          }
+        }
+      }
+    },
+    "%@ stopped" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ parou"
+          }
+        }
+      }
+    },
+    "%@ is done" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ terminou"
+          }
+        }
+      }
+    },
+    "%@ finished" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ terminou"
+          }
+        }
+      }
+    },
+    "Stopped with an error" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parou com um erro"
+          }
+        }
+      }
+    },
+    "Waiting for your next prompt" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando seu próximo pedido"
+          }
+        }
+      }
+    },
+    "Needs you" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Precisa de você"
+          }
+        }
+      }
+    },
+    "Subagents running" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subagentes rodando"
+          }
+        }
+      }
+    },
+    "%lld more" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "+%lld na fila"
+          }
+        }
+      }
+    },
+    "Open %@" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir %@"
+          }
+        }
+      }
+    },
+    "Keep planning" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar planejando"
+          }
+        }
+      }
+    },
+    "Approve plan" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprovar plano"
+          }
+        }
+      }
+    },
+    "Always allow" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sempre permitir"
+          }
+        }
+      }
+    },
+    "Allow and don't ask again for this in this project" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprova e não pergunta mais isso neste projeto"
+          }
+        }
+      }
+    },
+    "Show important updates below the closed notch" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar avisos importantes abaixo do notch fechado"
+          }
+        }
+      }
+    },
+    "Approvals, questions, errors and a summary of what the agent did when it finishes." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprovações, perguntas, erros e um resumo do que o agente fez quando ele termina."
+          }
+        }
+      }
+    },
+    "While an agent is running, its mascot replaces the audio spectrum on the right side of the notch." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enquanto um agente estiver rodando, o mascote dele aparece no lugar do espectro de áudio, do lado direito do notch."
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

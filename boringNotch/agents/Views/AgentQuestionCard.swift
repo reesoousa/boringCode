@@ -12,6 +12,8 @@ import SwiftUI
 struct AgentQuestionCard: View {
     let sessionID: String
     let pending: AgentPendingQuestion
+    /// Dentro do cartão da aba: sem fundo próprio (o cartão já tem).
+    var embedded = false
 
     @ObservedObject private var store = AgentSessionStore.shared
     @State private var step = 0
@@ -24,6 +26,9 @@ struct AgentQuestionCard: View {
     private var question: AgentQuestion { pending.questions[min(step, pending.questions.count - 1)] }
     private var isLast: Bool { step >= pending.questions.count - 1 }
 
+    /// Escolha única sem texto livre: tocar na opção já responde (ou passa para a próxima).
+    private var answersOnTap: Bool { !question.multiSelect && !otherActive.contains(question.id) }
+
     private func answer(for question: AgentQuestion) -> String? {
         var parts = question.options.map(\.label).filter { selections[question.id]?.contains($0) == true }
         if otherActive.contains(question.id) {
@@ -34,7 +39,7 @@ struct AgentQuestionCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: embedded ? 7 : 8) {
             HStack(spacing: 6) {
                 if pending.questions.count > 1 {
                     Text("\(step + 1)/\(pending.questions.count)")
@@ -50,7 +55,7 @@ struct AgentQuestionCard: View {
                         .background(Capsule().fill(Color.white.opacity(0.08)))
                 }
                 Text(question.question)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: embedded ? 13 : 12, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -60,6 +65,7 @@ struct AgentQuestionCard: View {
                 ForEach(question.options) { option in
                     chip(option.label, selected: selections[question.id]?.contains(option.label) == true) {
                         toggle(option.label)
+                        if answersOnTap { advance() }
                     }
                     .help(option.description ?? option.label)
                 }
@@ -88,24 +94,19 @@ struct AgentQuestionCard: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.gray)
                 Spacer()
-                Button(action: advance) {
-                    Text(isLast ? "Send" : "Next")
-                        .font(.system(size: 11, weight: .semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .foregroundStyle(.black)
-                        .background(Capsule().fill(Color.white))
-                        .contentShape(Capsule())
+                if !answersOnTap {
+                    Button(isLast ? "Send" : "Next", action: advance)
+                        .buttonStyle(AgentPillButtonStyle(prominent: true))
+                        .disabled(answer(for: question) == nil)
+                        .transition(.scale(scale: 0.8).combined(with: .opacity))
                 }
-                .buttonStyle(.plain)
-                .disabled(answer(for: question) == nil)
-                .opacity(answer(for: question) == nil ? 0.4 : 1)
             }
+            .animation(.smooth(duration: 0.25), value: answersOnTap)
         }
-        .padding(10)
+        .padding(embedded ? 0 : 10)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(Color.white.opacity(embedded ? 0 : 0.06))
         )
         .background(WindowReader(window: $window))
         .onChange(of: otherFocused) { _, focused in setTextInput(focused) }

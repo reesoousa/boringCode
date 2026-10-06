@@ -138,6 +138,26 @@ struct ContentView: View {
         return items
     }
 
+    /// Aviso do agente por baixo do notch fechado (aprovação, pergunta, terminou, erro).
+    private var agentPeek: AgentPeek? {
+        guard Defaults[.agentsClosedPeek], vm.notchState == .closed, !vm.hideOnClosed,
+              agentIndicatorStatus != nil else { return nil }
+        switch selectedActivity {
+        case .agents?, .music?: return agentStore.closedPeek
+        default: return nil
+        }
+    }
+
+    /// Largura do aviso = largura da pílula fechada que está em cima dele.
+    private var agentPeekWidth: CGFloat {
+        if case .music? = selectedActivity {
+            return musicActivityCenterWidth + 2 * max(0, displayClosedNotchHeight - 12)
+        }
+        let item = max(0, vm.effectiveClosedNotchHeight - 12)
+        return 2 * AgentLiveActivity.slotWidth(item) + vm.closedNotchSize.width - cornerRadiusInsets.closed.top
+            + 2 * AgentLiveActivity.peekExtraWidth + 16
+    }
+
     /// Status do agente a mostrar no notch fechado; nil = nada (espectro volta).
     private var agentIndicatorStatus: AgentSessionStatus? {
         guard Defaults[.agentsEnabled], Defaults[.agentsShowClosedIndicator] else { return nil }
@@ -232,10 +252,14 @@ struct ContentView: View {
             // notification is still in the stack leaves the chin at the
             // notification's width.
             switch activity {
-            case .notification, .agents, .localSend:
+            case .notification, .localSend:
                 chinWidth += (2 * max(0, vm.effectiveClosedNotchHeight - 12) + 20)
+            case .agents:
+                chinWidth += 2 * AgentLiveActivity.slotWidth(max(0, vm.effectiveClosedNotchHeight - 12)) + 14
+                if agentPeek != nil { chinWidth += 2 * AgentLiveActivity.peekExtraWidth }
             case .music:
                 chinWidth += (2 * max(0, displayClosedNotchHeight - 12) + 20 + 2 * liveActivityEdgeMargin + 2)
+                if agentPeek != nil { chinWidth += 2 * AgentLiveActivity.peekExtraWidth }
                 // The inline song-change peek widens the pill itself, so the
                 // chin has to grow with it — otherwise the hover region is
                 // narrower than what's on screen.
@@ -330,6 +354,8 @@ struct ContentView: View {
                             // at once the innermost animation wins, so the
                             // open/close springs below keep precedence.
                             .animation(.smooth(duration: 0.3), value: closedNotchContent)
+                            // O aviso do agente cresce o notch para baixo com mola, como a Dynamic Island.
+                            .animation(.spring(response: 0.42, dampingFraction: 0.82), value: agentPeek?.id)
                     }
                     .contentShape(Rectangle())
                     .onHover { hovering in
@@ -535,7 +561,7 @@ struct ContentView: View {
                                       .frame(alignment: .center)
                               case .agents:
                                   if let status = agentIndicatorStatus {
-                                      AgentLiveActivity(status: status)
+                                      AgentLiveActivity(status: status, peeking: agentPeek != nil)
                                   }
                               case .localSend(let transfer):
                                   LocalSendLiveActivity(transfer: transfer)
@@ -606,6 +632,15 @@ struct ContentView: View {
                               .fixedSize()
                       }
                       .zIndex(1)
+            if let peek = agentPeek {
+                AgentPeekRow(peek: peek)
+                    .frame(width: agentPeekWidth, alignment: .leading)
+                    .id(peek.id)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: -6)).animation(.smooth(duration: 0.35).delay(0.08)),
+                        removal: .opacity.animation(.easeOut(duration: 0.15))
+                    ))
+            }
             if vm.notchState == .open {
                 VStack {
                     // An open notch with a live notification is showing the
@@ -749,7 +784,8 @@ struct ContentView: View {
     /// hardware is, and keeps liveActivityEdgeMargin in play so content
     /// clears the bezel — the inline path had dropped it entirely.
     private var musicActivityCenterWidth: CGFloat {
-        let margin = vm.closedNotchSize.width - 4 + (2 * liveActivityEdgeMargin)
+        var margin = vm.closedNotchSize.width - 4 + (2 * liveActivityEdgeMargin)
+        if agentPeek != nil { margin += 2 * AgentLiveActivity.peekExtraWidth }
         guard showingInlineMusicPeek else { return margin }
         return margin + (2 * inlineMusicPeekLabelWidth)
     }
@@ -894,7 +930,7 @@ struct ContentView: View {
 extension ContentView {
     @discardableResult
     private func doOpen() -> Bool {
-        if vm.notchState == .closed, pointerIsOverAgentSide() {
+        if vm.notchState == .closed, agentPeek != nil || pointerIsOverAgentSide() {
             coordinator.currentView = .agents
         } else if vm.notchState == .closed, case .localSend? = selectedActivity, Defaults[.boringShelf] {
             // Recebendo pelo LocalSend: abre onde o arquivo vai aparecer.

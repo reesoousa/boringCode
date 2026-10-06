@@ -156,9 +156,11 @@ Decisões de produto (definidas pelo dono):
 - **Aba "Agentes"** no notch aberto (ao lado de Home/Shelf). Lista sessões, aprovar/recusar, clique → foca terminal/editor.
 - **Notch fechado** (prioridade sempre do layout do Boring Notch):
   - só música → capa à esquerda, espectro à direita (original).
-  - música + agente → música à esquerda (interações normais), **indicador do agente no lugar do espectro**.
-  - só agente → padrão Open Island nos dois lados: status geral à esquerda (✻ / ! / ? / ✓ / ✗),
-    um quadradinho por sessão à direita (cor = status; pulsa quando espera você).
+  - música + agente → música à esquerda (interações normais), **mascote do agente no lugar do espectro**.
+  - só agente → mascote à esquerda, um quadradinho por sessão à direita (cor = status; pulsa quando espera você).
+  - **Aviso por baixo** (decisão do dono, 2026-10-05: "quando for algo importante, informação direto no notch"):
+    aprovação/pergunta (fica até responder), terminou (resumo do `last_assistant_message`, 6 s) e erro. O notch
+    cresce para baixo com mola e alarga 56 pt de cada lado. Ajuste `agentsClosedPeek`.
 - **Hover nas áreas do agente** abre o notch direto na aba Agentes; esquerda/centro/arrastar arquivo = normal.
 - **Perguntas (AskUserQuestion)** respondidas no notch (opções + "Outra…"); ExitPlanMode vira aprovação.
 - **Nome:** tudo que o usuário vê diz "boringCode" (traduções no xcstrings, chaves iguais ao upstream).
@@ -168,8 +170,16 @@ Decisões de produto (definidas pelo dono):
 - **Agentes/hosts:** Claude Code (Terminal/iTerm, extensão VS Code/Cursor, app Claude) e Codex
   (CLI, VS Code, app Codex = `ChatGPT.app`, bundle `com.openai.codex`, `codex://threads/<id>`).
   Cores: Claude laranja, Codex azul.
-- **Animação calma:** ✻ vetorial gira 8 s/volta e respira; parado com Reduzir movimento.
-  Nada frenético/chamativo quando ocioso. Ícone da aba: `>_` sem caixa (`AgentPromptGlyph`).
+- **Mascote em pixels** (`AgentMascot`, decisão do dono 2026-10-05: "os SVGs que o Claude usa do robozinho"):
+  o Clawd do Claude Code na mesma grade da tela de boas-vindas (18×5, pixel 1:2 como meio bloco do terminal,
+  arte tirada do próprio binário do Claude Code) e um bloquinho `>_` para o Codex. Pose por estado: anda (comandos),
+  digita (edição), passa os olhos (leitura/busca), acena (aprovação), braço erguido (pergunta), pulinho (terminou),
+  braços caídos + tremor (erro), respira e pisca parado. Estático com Reduzir movimento. Ícone da aba: `>_` (`AgentPromptGlyph`).
+- **Aba Agentes = cartão de foco** (referência do dono: Coucou, github.com/Louis-CFM/coucou, MIT — sem o personagem
+  Mochi): mascote à esquerda, passos do turno à direita (últimos 3: verbo + alvo, +N −M nas edições, atual com
+  brilho), coluna com as outras sessões. O cartão vira o pedido: aprovação (descrição + comando + Recusar /
+  Sempre permitir / Aprovar; plano = Continuar planejando / Aprovar plano), pergunta (escolha única responde no
+  toque), terminou (resumo + Abrir terminal / OK) e erro. Brilho colorido na base por situação.
 - **Som sutil** ao concluir (som do sistema, padrão Bottle, volume 0,35).
 - **Logo** (arte-fonte em `logo/`): ícone do app (grade 824/1024), barra de menus (SVG template
   `menubarIcon`), boas-vindas. Sobre no padrão Apple: "Feito para pessoas não tão chatas assim."
@@ -191,7 +201,11 @@ Arquitetura:
   Só uma instância escuta: se o socket já responde, a outra não o toma (tenta de novo a cada 5 s,
   para assumir se a dona fechar). O app hospedeiro dos testes (`XCTestConfigurationFilePath`) não
   liga o módulo de agentes.
-- `AgentSessionStore` (@MainActor) = reducer de eventos → `AgentSession` (status, atividade, TTY, PID).
+- `AgentSessionStore` (@MainActor) = reducer de eventos → `AgentSession` (status, passos, resumo final, TTY, PID).
+  `AgentActivity.swift` traduz ferramenta → passo (`AgentStepParser`: tipo, alvo, `description` do Bash, diff +N −M
+  pelo `difference(from:)`); `closedPeek` decide o aviso do notch fechado. "Sempre permitir" devolve
+  `permission_suggestions` como `updatedPermissions` (só Claude; o Codex recusa). Codex continua só com os 4 hooks
+  (PreToolUse nele enche o terminal de log, como o Open Island também evita).
   Poda sessões cujo PID morreu. `AgentTerminalFocus` = AppleScript por TTY / abrir pasta no VS Code.
 - **App sem sandbox** (aprovado pelo dono em 2026-09-30): precisa escrever em `~/.claude`, controlar
   Terminal/iTerm e o socket (limite de 104 bytes no sun_path estoura dentro do container).
