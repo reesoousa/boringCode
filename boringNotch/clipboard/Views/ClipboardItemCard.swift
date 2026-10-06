@@ -66,8 +66,9 @@ struct ClipboardItemCard: View {
         HStack(spacing: 5) {
             ClipboardSourceIcon(bundleID: item.sourceBundleID, fallbackSymbol: kindSymbol)
                 .frame(width: 14, height: 14)
-            TimelineView(.periodic(from: .now, by: 30)) { context in
-                Text(verbatim: ClipboardTime.short(item.date, now: context.date))
+            // TaskTimeline: um TimelineView por cartão acordava o app a cada quadro da tela.
+            TaskTimeline(interval: 30) { now in
+                Text(verbatim: ClipboardTime.short(item.date, now: now))
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.gray)
                     .contentTransition(.numericText())

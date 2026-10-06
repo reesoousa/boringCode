@@ -94,6 +94,27 @@ xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -derivedDataPath b
 - **Release ad-hoc cai na abertura** (library validation: "different Team IDs"). Por isso o
   `make-dmg.sh` re-assina tudo com o mesmo "Apple Development" (Team ID). Ver "Distribuição".
 
+## Desempenho (medido em 2026-10-05, num M4 Pro)
+
+O app fica aberto o dia todo e o público inclui Macs antigos: parado, o notch tem que custar ~0%.
+Medir com `CONFIG=Release scripts/install-dev.sh` (Debug é mais lento) + `top -pid`/`footprint -p` e, para saber
+onde está o custo, `xcrun xctrace record --template 'Time Profiler' --attach <pid>` (e o template `SwiftUI`).
+
+Regras (cada uma veio de um gasto real encontrado):
+- **Nada de `TimelineView` nem animação `.repeatForever`/`phaseAnimator`/`symbolEffect(.repeating)` no notch.** No macOS
+  eles seguem o display link (até 120 Hz) e cada quadro refaz o layout da janela do notch inteira. Relógio lento →
+  `TaskTimeline` (`extensions/TaskTimeline.swift`); pulso/brilho → Core Animation (`agentPulse`, `AgentShimmerBand`);
+  animação contínua de verdade → camada CA com quadros pré-desenhados (`AgentMascotLayer`).
+- O `NSHostingView` da janela do notch usa `sizingOptions = []` (janela de tamanho fixo).
+- `@Published` só publica quando muda de fato (ex.: `pruneSessions` trabalha numa cópia) — publicar à toa recalcula o
+  `ContentView`.
+- Trabalho em segundo plano só quando alguém vê: captura de áudio só com um espectro na tela; o LocalSend só varre a
+  rede quando você abre o slot dele.
+- Nada caro dentro de `body` (ex.: `AppLanguage.allCases` lia arquivos do disco a cada redesenho dos Ajustes).
+
+Resultado: notch fechado com o Clawd andando e música tocando ~16% → ~0,2% de CPU; aberto no cartão ~18% → ~0,6%;
+memória 180–200 MB → ~80 MB.
+
 ## Regras de git
 
 - **Nunca** commitar direto em `main` nem `dev`. Uma branch por feature: `feat/...`

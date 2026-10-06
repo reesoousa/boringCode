@@ -122,14 +122,34 @@ final class AudioCaptureManager: ObservableObject {
 
     func setLevelsConsumer(_ consumer: AudioCaptureLevelsConsumer) {
         levelsConsumerLock.lock()
-        defer { levelsConsumerLock.unlock() }
         levelsConsumers.add(consumer)
+        levelsConsumerLock.unlock()
+        // Um espectro apareceu: liga a captura se a música estiver tocando.
+        DispatchQueue.main.async { [weak self] in self?.reevaluate() }
     }
 
     func clearLevelsConsumer(_ consumer: AudioCaptureLevelsConsumer) {
         levelsConsumerLock.lock()
-        defer { levelsConsumerLock.unlock() }
         levelsConsumers.remove(consumer)
+        levelsConsumerLock.unlock()
+        // Nenhum espectro na tela (ex.: o mascote do agente no lugar dele): desliga a captura.
+        // Com uma folga, para trocar de aba (um espectro sai, outro entra) não religar o tap.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.reevaluate() }
+    }
+
+    private var hasLevelsConsumers: Bool {
+        levelsConsumerLock.lock()
+        defer { levelsConsumerLock.unlock() }
+        return !levelsConsumers.allObjects.isEmpty
+    }
+
+    /// Últimas entradas de `evaluate` (só na main), para reavaliar quando os espectros mudam.
+    private var lastEvaluation: (isPlaying: Bool, displayBundleID: String?, captureBundleIDs: [String], enabled: Bool)?
+
+    private func reevaluate() {
+        guard let last = lastEvaluation else { return }
+        evaluate(isPlaying: last.isPlaying, displayBundleID: last.displayBundleID,
+                 captureBundleIDs: last.captureBundleIDs, enabled: last.enabled)
     }
 
     func latestLevelsSnapshot() -> [Float]? {
@@ -191,8 +211,9 @@ final class AudioCaptureManager: ObservableObject {
         captureBundleIDs: [String],
         enabled: Bool
     ) {
+        lastEvaluation = (isPlaying, displayBundleID, captureBundleIDs, enabled)
         guard #available(macOS 14.2, *),
-              enabled, isPlaying,
+              enabled, isPlaying, hasLevelsConsumers,
               let resolvedDisplayBundleID = displayBundleID,
               !resolvedDisplayBundleID.isEmpty else {
             stopCaptureAsync()

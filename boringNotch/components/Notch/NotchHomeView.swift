@@ -153,10 +153,10 @@ struct MusicControlsView: View {
             )
             .fontWeight(.medium)
             if Defaults[.enableLyrics] {
-                TimelineView(.animation(minimumInterval: 0.25)) { timeline in
+                TaskTimeline(interval: 0.25) { timelineDate in
                     let currentElapsed: Double = {
                         guard musicManager.isPlaying else { return musicManager.elapsedTime }
-                        let delta = timeline.date.timeIntervalSince(musicManager.timestampDate)
+                        let delta = timelineDate.timeIntervalSince(musicManager.timestampDate)
                         let progressed = musicManager.elapsedTime + (delta * musicManager.playbackRate)
                         return min(max(progressed, 0), musicManager.songDuration)
                     }()
@@ -337,8 +337,9 @@ struct MusicPlaybackTimeline<Content: View>: View {
     @ViewBuilder let content: (Date) -> Content
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: playbackRate > 0 ? musicPlaybackTickInterval : nil)) { context in
-            content(context.date)
+        // TaskTimeline, não TimelineView: só acorda 5×/s em vez de a cada quadro da tela.
+        TaskTimeline(interval: playbackRate > 0 ? musicPlaybackTickInterval : nil) { date in
+            content(date)
         }
     }
 }

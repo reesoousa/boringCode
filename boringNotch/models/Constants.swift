@@ -39,14 +39,16 @@ struct AppLanguage: RawRepresentable, Hashable, Identifiable, Defaults.Serializa
         self.rawValue = rawValue
     }
 
-    static var allCases: [AppLanguage] {
+    /// Calculada uma vez: lia e decodificava do disco todos os Localizable.strings a cada
+    /// redesenho dos Ajustes (os idiomas do pacote não mudam com o app aberto).
+    static let allCases: [AppLanguage] = {
         let languages = Bundle.main.localizations
             .filter(isSelectableLocalization)
             .map(AppLanguage.init(rawValue:))
             .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
 
         return [.system] + languages
-    }
+    }()
 
     var displayName: String {
         if self == .system {

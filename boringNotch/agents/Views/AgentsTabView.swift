@@ -350,10 +350,7 @@ private struct AgentStepsView: View {
                     Image(systemName: session.status == .done ? "checkmark" : "text.cursor")
                         .font(.system(size: 10, weight: .semibold))
                     if session.status == .done {
-                        // "Concluído há 3 min", atualizando sozinho.
-                        TimelineView(.periodic(from: .now, by: 30)) { _ in
-                            Text("Finished \(session.updatedAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))")
-                        }
+                        AgentFinishedAgoText(date: session.updatedAt)
                     } else {
                         Text("Waiting for your next prompt")
                     }
@@ -418,7 +415,6 @@ private struct AgentStepRow: View {
                 .font(.system(size: row.state == .running ? 10.5 : 9, weight: .semibold))
                 .foregroundStyle(iconColor)
                 .contentTransition(.symbolEffect(.replace))
-                .symbolEffect(.pulse, options: .repeating, isActive: row.isCurrent)
                 .frame(width: 14)
             AgentShimmerText(text: row.verb, active: row.isCurrent)
                 .font(.system(size: 12.5, weight: .medium))
@@ -457,24 +453,31 @@ struct AgentShimmerText: View {
 
     var body: some View {
         if active && !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
-                let period = 2.2
-                let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
-                let center = -0.3 + 1.6 * phase
-                Text(text)
-                    .foregroundStyle(LinearGradient(
-                        stops: [
-                            .init(color: .white.opacity(0.6), location: center - 0.3),
-                            .init(color: .white, location: center),
-                            .init(color: .white.opacity(0.6), location: center + 0.3),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ))
-            }
+            // A faixa de brilho é animada pelo Core Animation (AgentShimmerBand): passa sobre o
+            // texto sem acordar o app a cada quadro.
+            Text(text)
+                .foregroundStyle(.white.opacity(0.62))
+                .overlay { AgentShimmerBand().mask(Text(text)).allowsHitTesting(false) }
         } else {
             Text(text).foregroundStyle(active ? .white : .gray)
         }
+    }
+}
+
+/// "Concluído há 3 min", atualizando a cada 30 s (tarefa, não `TimelineView`: ver AgentMascot).
+private struct AgentFinishedAgoText: View {
+    let date: Date
+    @State private var now = Date()
+
+    var body: some View {
+        Text("Finished \(date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))")
+            .id(now)
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(30), tolerance: .seconds(5))
+                    now = Date()
+                }
+            }
     }
 }
 
@@ -662,9 +665,7 @@ private struct AgentSessionPill: View {
                     Circle()
                         .fill(session.status.tint)
                         .frame(width: 6, height: 6)
-                        .phaseAnimator([1.0, 0.35]) { dot, phase in
-                            dot.opacity(session.status == .error ? 1 : phase)
-                        } animation: { _ in .easeInOut(duration: 0.7) }
+                        .agentPulse(session.status != .error)
                 }
             }
             .padding(.horizontal, 9)

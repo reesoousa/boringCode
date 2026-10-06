@@ -171,13 +171,20 @@ final class LocalSendService: ObservableObject {
     }
 
     /// Rede mudou (outro Wi-Fi, cabo): se anuncia de novo; quem sumiu sai na poda do refresh.
+    /// O sistema avisa de muita mudança miúda (interfaces internas indo e vindo): só reage quando
+    /// as interfaces de fato mudam, e sem varrer a sub-rede — isso fica para quando o Shelf abre.
+    private var lastPathSignature = ""
+
     private func watchNetwork() {
         let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { [weak self] path in
             guard path.status == .satisfied else { return }
+            let signature = path.availableInterfaces.map(\.name).sorted().joined(separator: ",")
             Task { @MainActor in
+                guard let self, signature != self.lastPathSignature else { return }
+                self.lastPathSignature = signature
                 try? await Task.sleep(for: .seconds(1))
-                self?.refresh(force: true)
+                self.refresh(force: true, scanSubnetIfEmpty: false)
             }
         }
         monitor.start(queue: queue)
@@ -205,7 +212,7 @@ final class LocalSendService: ObservableObject {
     // MARK: - Descoberta
 
     /// Procura aparelhos (o Shelf chama ao abrir). Aparelhos que não responderem somem da lista.
-    func refresh(force: Bool = false) {
+    func refresh(force: Bool = false, scanSubnetIfEmpty: Bool = true) {
         guard isRunning else { return }
         guard force || Date().timeIntervalSince(lastRefresh) > 4 else { return }
         let roundStart = Date()
@@ -216,7 +223,7 @@ final class LocalSendService: ObservableObject {
         Task {
             await confirmKnownDevices()
             try? await Task.sleep(for: .seconds(2.5))
-            if devices.isEmpty { await scanSubnet() }
+            if devices.isEmpty, scanSubnetIfEmpty { await scanSubnet() }
             try? await Task.sleep(for: .seconds(2))
             guard lastRefresh == roundStart else { return }
             withAnimation(.smooth(duration: 0.3)) {

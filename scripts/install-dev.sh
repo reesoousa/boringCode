@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compila o boringCode (Debug), assina com o certificado fixo "boringCode Dev" e instala a
+# Compila o boringCode (Debug; CONFIG=Release para medir desempenho como na versão distribuída), assina com o certificado fixo "boringCode Dev" e instala a
 # única cópia em /Applications, abrindo o app em seguida.
 # Uso: scripts/install-dev.sh            (roda scripts/setup-dev-signing.sh se precisar)
 #      scripts/install-dev.sh --no-open  (só instala)
@@ -15,15 +15,20 @@ IDENTITY="boringCode Dev"
 BUNDLE_ID="com.reesoousa.boringcode"
 # ".noindex" no nome faz o Spotlight ignorar a pasta: os builds não aparecem como apps.
 DERIVED="build.noindex"
-BUILT="$DERIVED/Build/Products/Debug/boringCode.app"
+CONFIG="${CONFIG:-Debug}"
+BUILT="$DERIVED/Build/Products/$CONFIG/boringCode.app"
 DEST="/Applications/boringCode.app"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 scripts/setup-dev-signing.sh
 
-echo "▸ Compilando (Debug)…"
-xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -configuration Debug \
-  -derivedDataPath "$DERIVED" -destination 'platform=macOS,arch=arm64' build -quiet
+echo "▸ Compilando ($CONFIG)…"
+# Release local sem hardened runtime: o certificado de dev não tem Team ID e a library validation
+# derrubaria o app na abertura. Só para medir aqui — o DMG (make-dmg.sh) segue com o runtime.
+EXTRA=()
+[ "$CONFIG" = "Release" ] && EXTRA=(ENABLE_HARDENED_RUNTIME=NO)
+xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -configuration "$CONFIG" \
+  -derivedDataPath "$DERIVED" -destination 'platform=macOS,arch=arm64' build -quiet ${EXTRA[@]+"${EXTRA[@]}"}
 
 echo "▸ Assinando com \"$IDENTITY\"…"
 source scripts/lib/sign-app.sh

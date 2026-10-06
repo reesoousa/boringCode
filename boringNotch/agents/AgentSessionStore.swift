@@ -552,10 +552,11 @@ final class AgentSessionStore: ObservableObject {
     }
 
     /// Tira sessões cujo processo morreu sem SessionEnd e concluídas antigas.
+    /// Roda a cada 5 s: trabalha numa cópia e só publica se algo mudou — publicar à toa fazia
+    /// o notch inteiro (ContentView) se recalcular a cada 5 s.
     private func pruneSessions() {
         let now = Date()
-        let before = sessions.count
-        sessions.removeAll { session in
+        var pruned = sessions.filter { session in
             if let pid = session.agentPID, kill(pid, 0) != 0, errno == ESRCH {
                 for permission in session.pendingPermissions {
                     pendingConnections.removeValue(forKey: permission.id)?.respond(nil)
@@ -563,25 +564,26 @@ final class AgentSessionStore: ObservableObject {
                 if let question = session.pendingQuestion {
                     pendingConnections.removeValue(forKey: question.id)?.respond(nil)
                 }
-                return true
+                return false
             }
             let age = now.timeIntervalSince(session.updatedAt)
             switch session.status {
-            case .done, .error: return age > 30 * 60
-            case .idle: return age > 2 * 60 * 60
+            case .done, .error: return age <= 30 * 60
+            case .idle: return age <= 2 * 60 * 60
             // Sem PID não dá pra saber se o processo morreu: desiste após 2h sem eventos.
-            default: return session.agentPID == nil && !session.needsAnswer && age > 2 * 60 * 60
+            default: return !(session.agentPID == nil && !session.needsAnswer && age > 2 * 60 * 60)
             }
         }
-        if sessions.count != before { log.debug("removidas \(before - self.sessions.count) sessões") }
+        if pruned.count != sessions.count { log.debug("removidas \(self.sessions.count - pruned.count) sessões") }
 
         // "Rodando" sem nenhum evento há 90s e sem processo para confirmar: provavelmente
         // parou sem avisar. Fica parado (sem animação) em vez de chamar atenção à toa.
-        for index in sessions.indices where sessions[index].status == .running
-            && sessions[index].agentPID == nil
-            && now.timeIntervalSince(sessions[index].updatedAt) > 90 {
-            sessions[index].status = .idle
-            sessions[index].activity = nil
+        for index in pruned.indices where pruned[index].status == .running
+            && pruned[index].agentPID == nil
+            && now.timeIntervalSince(pruned[index].updatedAt) > 90 {
+            pruned[index].status = .idle
+            pruned[index].activity = nil
         }
+        if pruned != sessions { sessions = pruned }
     }
 }
