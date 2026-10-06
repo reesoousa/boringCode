@@ -475,36 +475,51 @@ private struct AgentApprovalContent: View {
     let session: AgentSession
     let permission: AgentPermissionRequest
     @ObservedObject private var store = AgentSessionStore.shared
+    /// Os botões só valem um instante depois que o pedido aparece: um clique que já
+    /// vinha para outra coisa não aprova um pedido que acabou de trocar.
+    @State private var armed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             if let note = permission.note, permission.kind != .planning {
                 Text(note)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11.5))
                     .foregroundStyle(Color.white.opacity(0.75))
                     .lineLimit(1)
-                    .padding(.top, -2)
+                    .padding(.top, -1)
             }
             detailBox
             HStack(spacing: 8) {
                 if permission.kind == .planning {
-                    Button("Keep planning") { store.deny(session.id) }
+                    Button("Keep planning") { store.deny(session.id, permissionID: permission.id) }
                         .buttonStyle(AgentPillButtonStyle(prominent: false))
-                    Button("Approve plan") { store.approve(session.id) }
+                    Button("Approve plan") { store.approve(session.id, permissionID: permission.id) }
                         .buttonStyle(AgentPillButtonStyle(prominent: true))
                 } else {
-                    Button("Deny") { store.deny(session.id) }
+                    Button("Deny") { store.deny(session.id, permissionID: permission.id) }
                         .buttonStyle(AgentPillButtonStyle(prominent: false))
                     if permission.canAlwaysAllow {
-                        Button("Always allow") { store.approveAlways(session.id) }
+                        Button("Always allow") { store.approveAlways(session.id, permissionID: permission.id) }
                             .buttonStyle(AgentPillButtonStyle(prominent: false))
-                            .help(Text("Allow and don't ask again for this in this project"))
+                            .help(Text("Allow now and save the rule: \(permission.alwaysAllowRules.joined(separator: ", "))"))
                     }
-                    Button("Allow") { store.approve(session.id) }
+                    Button("Allow") { store.approve(session.id, permissionID: permission.id) }
                         .buttonStyle(AgentPillButtonStyle(prominent: true))
                 }
             }
+            .disabled(!armed)
         }
+        .task(id: permission.id) {
+            armed = false
+            try? await Task.sleep(for: .milliseconds(450))
+            armed = true
+        }
+    }
+
+    /// O texto passa de duas linhas na caixa (estimativa pelo tamanho).
+    private var overflows: Bool {
+        guard let detail = permission.detail else { return false }
+        return detail.filter(\.isNewline).count >= 2 || detail.count > 90
     }
 
     @ViewBuilder
@@ -512,12 +527,27 @@ private struct AgentApprovalContent: View {
         let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
         Group {
             if let detail = permission.detail, !detail.isEmpty {
-                Text(detail)
-                    .font(.system(size: 12, design: permission.kind == .planning ? .default : .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.92))
-                    .lineLimit(permission.note == nil ? 2 : 1)
-                    .truncationMode(.tail)
-                    .textSelection(.enabled)
+                // O comando aparece inteiro (rolando se for grande): nada fica escondido do que você aprova.
+                ScrollView(.vertical) {
+                    Text(detail)
+                        .font(.system(size: 12, design: permission.kind == .planning ? .default : .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .scrollIndicators(.visible)
+                .frame(maxHeight: 31)
+                .fixedSize(horizontal: false, vertical: true)
+                // Comando maior que duas linhas: esmaece embaixo para mostrar que continua (rola).
+                .mask(
+                    LinearGradient(
+                        stops: [.init(color: .black, location: 0), .init(color: .black, location: overflows ? 0.6 : 1),
+                                .init(color: .black.opacity(overflows ? 0.25 : 1), location: 1)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .help(detail)
             } else {
                 HStack(spacing: 7) {
                     Image(systemName: permission.kind.symbol)
@@ -526,8 +556,9 @@ private struct AgentApprovalContent: View {
                     Text(permission.target ?? permission.toolName)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(Color.white.opacity(0.92))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .lineLimit(2)
+                        .truncationMode(.head)
+                        .help(permission.target ?? permission.toolName)
                     if let added = permission.added, added > 0 {
                         Text("+\(added)")
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -542,7 +573,7 @@ private struct AgentApprovalContent: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background(shape.fill(Color.white.opacity(0.07)))
         .overlay(shape.strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
         .help(permission.toolName)

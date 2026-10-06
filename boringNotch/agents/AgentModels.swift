@@ -146,15 +146,39 @@ struct AgentPermissionRequest: Equatable {
     var target: String?
     /// Descrição que o agente deu ("Roda as migrações do banco").
     var note: String?
-    /// Texto da caixa de código: comando (até 6 linhas), URL inteira, começo do plano.
+    /// Texto da caixa de código: comando inteiro (até 4000 caracteres), URL inteira, começo do plano.
     var detail: String?
     var added: Int?
     var removed: Int?
-    /// `permission_suggestions` cru do Claude Code — vira `updatedPermissions` no "Sempre permitir".
+    /// Regras de `permission_suggestions` que o "Sempre permitir" grava (`updatedPermissions`).
+    /// Só entram `addRules` de permitir: mudar de modo ou liberar pastas fica no terminal.
     var suggestions: Data?
+    /// As mesmas regras em texto ("Bash(npm test:*)"), mostradas antes de você aceitar.
+    var alwaysAllowRules: [String] = []
     let receivedAt: Date
 
-    var canAlwaysAllow: Bool { suggestions != nil && kind != .planning }
+    var canAlwaysAllow: Bool { suggestions != nil && !alwaysAllowRules.isEmpty && kind != .planning }
+
+    /// Fica só com as sugestões seguras de mostrar e gravar: `addRules` com `behavior: allow`.
+    static func allowRuleSuggestions(_ raw: [Any]) -> (data: Data, rules: [String])? {
+        var kept: [[String: Any]] = []
+        var texts: [String] = []
+        for case let suggestion as [String: Any] in raw {
+            guard suggestion["type"] as? String == "addRules",
+                  suggestion["behavior"] as? String == "allow",
+                  let rules = suggestion["rules"] as? [[String: Any]], !rules.isEmpty else { continue }
+            let ruleTexts = rules.compactMap { rule -> String? in
+                guard let tool = rule["toolName"] as? String, !tool.isEmpty else { return nil }
+                if let content = rule["ruleContent"] as? String, !content.isEmpty { return "\(tool)(\(content))" }
+                return tool
+            }
+            guard ruleTexts.count == rules.count else { continue }
+            kept.append(suggestion)
+            texts += ruleTexts
+        }
+        guard !kept.isEmpty, let data = try? JSONSerialization.data(withJSONObject: kept) else { return nil }
+        return (data, texts)
+    }
 
     /// "Claude quer rodar um comando", "Claude quer editar um arquivo"…
     func headline(agent: AgentKind) -> String {

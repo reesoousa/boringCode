@@ -144,7 +144,10 @@ final class AgentSessionStore: ObservableObject {
                 return AgentPeek(
                     id: permission.id.uuidString, kind: .approval, sessionID: session.id, agent: session.agent,
                     title: permission.headline(agent: session.agent),
-                    detail: permission.detail?.singleLine ?? permission.target ?? permission.summary
+                    detail: permission.detail.map { detail in
+                        // Só cabe uma linha: "…" avisa que o comando continua (o cartão mostra tudo).
+                        detail.contains(where: \.isNewline) ? detail.singleLine + " …" : detail
+                    } ?? permission.target ?? permission.summary
                 )
             }
             if let question = session.pendingQuestion {
@@ -187,12 +190,20 @@ final class AgentSessionStore: ObservableObject {
 
     // MARK: - Ações
 
-    func approve(_ sessionID: String) { resolveFirstPermission(of: sessionID, allow: true) }
+    /// Aprova/recusa um pedido específico: se o pedido da frente já não for o que você viu
+    /// (respondido no terminal e trocado por outro), não faz nada.
+    func approve(_ sessionID: String, permissionID: UUID) {
+        resolveFirstPermission(of: sessionID, expected: permissionID, allow: true)
+    }
 
-    func deny(_ sessionID: String) { resolveFirstPermission(of: sessionID, allow: false) }
+    func deny(_ sessionID: String, permissionID: UUID) {
+        resolveFirstPermission(of: sessionID, expected: permissionID, allow: false)
+    }
 
     /// Permite e pede ao Claude Code para lembrar a regra (as sugestões do próprio pedido).
-    func approveAlways(_ sessionID: String) { resolveFirstPermission(of: sessionID, allow: true, always: true) }
+    func approveAlways(_ sessionID: String, permissionID: UUID) {
+        resolveFirstPermission(of: sessionID, expected: permissionID, allow: true, always: true)
+    }
 
     /// "OK" no cartão de terminou/erro: a aba volta a mostrar os passos.
     func acknowledgeOutcome(_ sessionID: String) {
@@ -424,9 +435,10 @@ final class AgentSessionStore: ObservableObject {
 
     // MARK: - Permissões
 
-    private func resolveFirstPermission(of sessionID: String, allow: Bool, always: Bool = false) {
+    private func resolveFirstPermission(of sessionID: String, expected: UUID, allow: Bool, always: Bool = false) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionID }),
-              let permission = sessions[index].pendingPermission else { return }
+              let permission = sessions[index].pendingPermission,
+              permission.id == expected else { return }
         var decision: [String: Any] = allow
             ? ["behavior": "allow"]
             : ["behavior": "deny", "message": "Denied by the user from the boringCode notch."]
@@ -449,7 +461,15 @@ final class AgentSessionStore: ObservableObject {
     /// Monta o pedido de permissão com o que dá para mostrar no cartão.
     private static func permissionRequest(payload: ClaudeHookPayload, body: Data, agent: AgentKind, at date: Date) -> AgentPermissionRequest {
         let toolName = payload.toolName ?? "Tool"
-        let (kind, target) = AgentStepParser.classify(toolName: toolName, input: payload.toolInput)
+        let (classified, shortTarget) = AgentStepParser.classify(toolName: toolName, input: payload.toolInput)
+        // Num pedido, o título vem da ferramenta, nunca do conteúdo do comando:
+        // "cat x && rm -rf y" é "rodar um comando", não "ler um arquivo".
+        let isShell = AgentStepParser.shellTools.contains(toolName)
+        let kind: AgentStepKind = isShell ? .running : classified
+        // Caminho completo (com ~): só o nome esconderia ~/.ssh/authorized_keys atrás de "authorized_keys".
+        let fullPath = (payload.toolInput?["file_path"] ?? payload.toolInput?["notebook_path"] ?? payload.toolInput?["path"])
+            .map { ($0 as NSString).abbreviatingWithTildeInPath }
+        let target = fullPath ?? shortTarget
         let stats = AgentStepParser.diffStats(toolName: toolName, input: payload.toolInput)
         var detail: String?
         switch kind {
@@ -461,17 +481,17 @@ final class AgentSessionStore: ObservableObject {
             detail = nil
         default:
             if let command = payload.toolInput?["command"] {
-                let lines = command.split(whereSeparator: \.isNewline).prefix(6)
-                detail = lines.joined(separator: "\n").clipped(400)
+                // Inteiro: um comando cortado esconderia o que vem depois do trecho visível.
+                detail = command.clipped(4000)
             } else {
                 detail = payload.toolDetail
             }
         }
-        var suggestions: Data?
+        var allowRules: (data: Data, rules: [String])?
         if agent == .claude,
            let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-           let raw = object["permission_suggestions"] as? [Any], !raw.isEmpty {
-            suggestions = try? JSONSerialization.data(withJSONObject: raw)
+           let raw = object["permission_suggestions"] as? [Any] {
+            allowRules = AgentPermissionRequest.allowRuleSuggestions(raw)
         }
         return AgentPermissionRequest(
             id: UUID(),
@@ -483,7 +503,8 @@ final class AgentSessionStore: ObservableObject {
             detail: detail,
             added: stats?.added,
             removed: stats?.removed,
-            suggestions: suggestions,
+            suggestions: allowRules?.data,
+            alwaysAllowRules: allowRules?.rules ?? [],
             receivedAt: date
         )
     }

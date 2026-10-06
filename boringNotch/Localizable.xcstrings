@@ -33783,16 +33783,6 @@
         }
       }
     },
-    "Allow and don't ask again for this in this project" : {
-      "localizations" : {
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aprova e não pergunta mais isso neste projeto"
-          }
-        }
-      }
-    },
     "Show important updates below the closed notch" : {
       "localizations" : {
         "pt-BR" : {
@@ -33819,6 +33809,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enquanto um agente estiver rodando, o mascote dele aparece no lugar do espectro de áudio, do lado direito do notch."
+          }
+        }
+      }
+    },
+    "Allow now and save the rule: %@" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aprova agora e salva a regra: %@"
           }
         }
       }

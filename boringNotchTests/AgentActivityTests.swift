@@ -69,12 +69,29 @@ final class AgentActivityTests: XCTestCase {
         XCTAssertEqual("- item com marcador".agentSummary, "item com marcador")
     }
 
+    func testAlwaysAllowKeepsOnlyAllowRules() {
+        let raw: [Any] = [
+            ["type": "addRules", "behavior": "allow", "destination": "localSettings",
+             "rules": [["toolName": "Bash", "ruleContent": "npm test:*"]]],
+            ["type": "setMode", "mode": "bypassPermissions", "destination": "session"],
+            ["type": "addDirectories", "directories": ["/"], "destination": "session"],
+            ["type": "addRules", "behavior": "deny", "rules": [["toolName": "Bash"]]],
+        ]
+        let kept = AgentPermissionRequest.allowRuleSuggestions(raw)
+        XCTAssertEqual(kept?.rules, ["Bash(npm test:*)"])
+        let decoded = try? JSONSerialization.jsonObject(with: kept!.data) as? [[String: Any]]
+        XCTAssertEqual(decoded?.count, 1)
+        XCTAssertNil(AgentPermissionRequest.allowRuleSuggestions([["type": "setMode", "mode": "acceptEdits"]]))
+    }
+
     func testPermissionHeadlines() {
         var request = AgentPermissionRequest(id: UUID(), toolName: "Bash", summary: "", receivedAt: Date())
         request.kind = .testing
         XCTAssertTrue(request.headline(agent: .claude).contains("Claude"))
         XCTAssertFalse(request.canAlwaysAllow)
         request.suggestions = Data("[]".utf8)
+        XCTAssertFalse(request.canAlwaysAllow)  // sem regra para mostrar, sem "sempre"
+        request.alwaysAllowRules = ["Bash(npm test:*)"]
         XCTAssertTrue(request.canAlwaysAllow)
     }
 }

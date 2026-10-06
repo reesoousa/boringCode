@@ -112,11 +112,14 @@ struct AgentStep: Identifiable, Equatable {
 
 /// Lê `tool_name` + `tool_input` e traduz para um passo.
 enum AgentStepParser {
+    /// Ferramentas que rodam comandos no shell.
+    static let shellTools: Set<String> = ["Bash", "shell", "exec_command", "local_shell"]
+
     static func step(id: String, toolName: String, input: JSONValue?, at date: Date) -> AgentStep {
         let (kind, command) = classify(toolName: toolName, input: input)
         // O Bash do Claude Code vem com uma descrição curta ("Roda os testes de busca"):
         // é bem mais clara que o comando cru.
-        let isShell = ["Bash", "shell", "exec_command", "local_shell"].contains(toolName)
+        let isShell = shellTools.contains(toolName)
         let description = isShell ? note(input) : nil
         var step = AgentStep(id: id, kind: kind, target: description ?? command, toolName: toolName,
                              targetIsCode: isShell && description == nil, startedAt: date)
