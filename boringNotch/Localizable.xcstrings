@@ -33802,6 +33802,16 @@
           }
         }
       }
+    },
+    "Finished %@" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Concluído %@"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

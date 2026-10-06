@@ -139,7 +139,9 @@ private struct AgentFocusCard: View {
                     .transition(.blurReplace.combined(with: .opacity))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: .infinity, alignment: .top)
+            // Centralizado na altura do cartão, alinhado com o mascote: conteúdo curto não
+            // deixa um vão embaixo.
+            .frame(maxHeight: .infinity, alignment: .leading)
             .animation(.smooth(duration: 0.35), value: mode)
         }
         .padding(.leading, 14)
@@ -344,9 +346,20 @@ private struct AgentStepsView: View {
                     .padding(.bottom, 1)
             }
             if rows.isEmpty {
-                Text(session.status == .done ? AgentSessionStatus.done.label : String(localized: "Waiting for your next prompt"))
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(.gray)
+                HStack(spacing: 6) {
+                    Image(systemName: session.status == .done ? "checkmark" : "text.cursor")
+                        .font(.system(size: 10, weight: .semibold))
+                    if session.status == .done {
+                        // "Concluído há 3 min", atualizando sozinho.
+                        TimelineView(.periodic(from: .now, by: 30)) { _ in
+                            Text("Finished \(session.updatedAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))")
+                        }
+                    } else {
+                        Text("Waiting for your next prompt")
+                    }
+                }
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(.gray)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(rows) { row in
