@@ -14,44 +14,40 @@ import SwiftUI
 
 struct AgentsTabView: View {
     @ObservedObject private var store = AgentSessionStore.shared
-    /// Sessão escolhida na coluna da direita (um pedido pendente tem prioridade).
-    @State private var selectedID: String?
 
-    /// Pendentes primeiro, depois ativas, depois o resto — dentro de cada grupo, mais recentes primeiro.
-    private var orderedSessions: [AgentSession] {
-        store.sessions.enumerated().sorted { lhs, rhs in
-            let left = rank(lhs.element)
-            let right = rank(rhs.element)
-            return left == right ? lhs.offset < rhs.offset : left > right
-        }.map(\.element)
+    /// Ordem fixa (a mais antiga em cima): as sessões não pulam de lugar enquanto trabalham.
+    private var listedSessions: [AgentSession] {
+        store.sessions.sorted { $0.startedAt == $1.startedAt ? $0.id < $1.id : $0.startedAt < $1.startedAt }
     }
 
-    private func rank(_ session: AgentSession) -> Int {
-        if session.needsAnswer { return 100 }
-        return session.status.isActive ? session.status.priority + 10 : 0
-    }
-
+    /// Quem aparece no cartão grande: um pedido esperando você; senão a escolhida na lista;
+    /// senão a mais urgente/recente.
     private var focused: AgentSession? {
         if let waiting = store.sessions.first(where: \.needsAnswer) { return waiting }
-        if let selectedID, let selected = store.sessions.first(where: { $0.id == selectedID }) { return selected }
-        return orderedSessions.first
+        if let id = store.selectedSessionID, let selected = store.sessions.first(where: { $0.id == id }) {
+            return selected
+        }
+        return store.sessions.max { lhs, rhs in
+            lhs.status.priority == rhs.status.priority ? lhs.updatedAt < rhs.updatedAt : lhs.status.priority < rhs.status.priority
+        }
     }
 
     var body: some View {
         Group {
             if let focused {
-                let others = orderedSessions.filter { $0.id != focused.id }
+                let listed = listedSessions
                 HStack(alignment: .top, spacing: 8) {
                     AgentFocusCard(session: focused)
-                    if !others.isEmpty {
-                        AgentSessionList(sessions: others) { session in
-                            withAnimation(.smooth(duration: 0.35)) { selectedID = session.id }
+                    if listed.count > 1 {
+                        AgentSessionList(sessions: listed, focusedID: focused.id) { session in
+                            withAnimation(.smooth(duration: 0.35)) { store.selectedSessionID = session.id }
                         }
                         .frame(width: 176)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                 }
-                .animation(.spring(response: 0.42, dampingFraction: 0.86), value: others.map(\.id))
+                .animation(.spring(response: 0.42, dampingFraction: 0.86), value: listed.count > 1)
+                .animation(.smooth(duration: 0.35), value: focused.id)
             } else {
                 emptyState
                     .transition(.opacity)
@@ -584,17 +580,22 @@ private struct AgentApprovalContent: View {
 
 private struct AgentSessionList: View {
     let sessions: [AgentSession]
+    let focusedID: String
     let onSelect: (AgentSession) -> Void
+    @Namespace private var selection
 
     var body: some View {
         ScrollView(.vertical) {
             VStack(spacing: 4) {
                 ForEach(sessions) { session in
-                    AgentSessionPill(session: session) { onSelect(session) }
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    AgentSessionPill(session: session, isFocused: session.id == focusedID, selection: selection) {
+                        onSelect(session)
+                    }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
             .animation(.smooth(duration: 0.35), value: sessions.map(\.id))
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: focusedID)
         }
         .scrollIndicators(.never)
     }
@@ -602,6 +603,9 @@ private struct AgentSessionList: View {
 
 private struct AgentSessionPill: View {
     let session: AgentSession
+    /// É a que está no cartão grande: fica destacada.
+    let isFocused: Bool
+    let selection: Namespace.ID
     let action: () -> Void
     @ObservedObject private var store = AgentSessionStore.shared
     @State private var isHovering = false
@@ -609,6 +613,10 @@ private struct AgentSessionPill: View {
     private var line: String {
         if session.needsAnswer { return String(localized: "Needs you", comment: "Agent session waiting for the user") }
         if session.status == .running, let step = session.currentStep {
+            // Com a descrição do agente ("Roda os testes"), ela já diz tudo.
+            if AgentStepParser.shellTools.contains(step.toolName), !step.targetIsCode, let target = step.target {
+                return target
+            }
             return [step.kind.verb, step.target].compactMap { $0 }.joined(separator: " ")
         }
         if session.status == .running { return AgentStepKind.thinking.verb }
@@ -650,8 +658,20 @@ private struct AgentSessionPill: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(isHovering ? 0.1 : 0.05))
+                    .fill(Color.white.opacity(isHovering ? 0.09 : 0.04))
             )
+            .background {
+                // Destaque desliza até a sessão escolhida.
+                if isFocused {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                        )
+                        .matchedGeometryEffect(id: "focused", in: selection)
+                }
+            }
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(AgentPressStyle())

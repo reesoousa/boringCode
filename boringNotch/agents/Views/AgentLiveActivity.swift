@@ -15,8 +15,6 @@ struct AgentLiveActivity: View {
     @EnvironmentObject private var vm: BoringViewModel
     @ObservedObject private var store = AgentSessionStore.shared
     let status: AgentSessionStatus
-    /// Mostrando um aviso por baixo: o notch se alarga para o texto caber.
-    var peeking = false
 
     private var itemSize: CGFloat {
         max(0, vm.effectiveClosedNotchHeight - 12)
@@ -24,33 +22,27 @@ struct AgentLiveActivity: View {
 
     var body: some View {
         HStack {
-            AgentClosedMascot(status: status, height: itemSize)
-                .frame(width: Self.slotWidth(itemSize), height: itemSize)
+            AgentClosedMascot(status: status, size: itemSize)
+                .frame(width: itemSize, height: itemSize)
 
             Rectangle()
                 .fill(.black)
-                .frame(width: vm.closedNotchSize.width - cornerRadiusInsets.closed.top
-                    + (peeking ? 2 * Self.peekExtraWidth : 0))
+                .frame(width: vm.closedNotchSize.width - cornerRadiusInsets.closed.top)
 
             AgentSessionCells(sessions: store.sessions, size: itemSize)
-                .frame(width: Self.slotWidth(itemSize), height: itemSize)
+                .frame(width: itemSize, height: itemSize)
         }
         .frame(height: vm.effectiveClosedNotchHeight)
         .animation(.smooth(duration: 0.25), value: status)
     }
-
-    /// Cada lado tem 1,5× a altura: o mascote é mais largo que alto.
-    static func slotWidth(_ itemSize: CGFloat) -> CGFloat { (itemSize * 1.5).rounded() }
-
-    /// Quanto o notch fechado cresce de cada lado enquanto mostra um aviso.
-    static let peekExtraWidth: CGFloat = 56
 }
 
-/// Mascote do notch fechado — a pose já diz o estado (acenando = precisa de você).
+/// Mascote pequeno do notch fechado — a pose já diz o estado (acenando = precisa de você).
 struct AgentClosedMascot: View {
     @ObservedObject private var store = AgentSessionStore.shared
     let status: AgentSessionStatus
-    let height: CGFloat
+    /// Lado do quadrado do slot (o mesmo do mini espectro).
+    let size: CGFloat
 
     var body: some View {
         let session = store.closedIndicatorSession
@@ -60,7 +52,9 @@ struct AgentClosedMascot: View {
             motion: session?.motionKind.motion ?? .idle,
             statusChangedAt: session?.statusChangedAt ?? .distantPast
         )
-        .frame(height: height * 0.8)
+        // 18×10 pt num notch comum: discreto, do tamanho dos outros ícones do notch.
+        .frame(width: size, height: size * 0.5)
+        .frame(width: size, height: size)
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: status)
     }
 }
@@ -71,10 +65,7 @@ struct AgentClosedIndicator: View {
     let size: CGFloat
 
     var body: some View {
-        // Um pouco mais largo que o slot (o espectro também não ocupa o quadrado inteiro).
-        AgentClosedMascot(status: status, height: size)
-            .frame(width: size * 1.35, height: size)
-            .frame(width: size, height: size)
+        AgentClosedMascot(status: status, size: size)
     }
 }
 

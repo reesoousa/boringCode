@@ -505,8 +505,8 @@ extension Defaults.Keys {
     static let agentsShowClosedIndicator = Key<Bool>("agentsShowClosedIndicator", default: true)
     static let agentsExpandOnApproval = Key<Bool>("agentsExpandOnApproval", default: true)
     static let agentsHoverOpensTab = Key<Bool>("agentsHoverOpensTab", default: true)
-    /// Aviso por baixo do notch fechado (aprovação, pergunta, terminou com o resumo, erro).
-    static let agentsClosedPeek = Key<Bool>("agentsClosedPeek", default: true)
+    /// Abre o notch no cartão de "terminou" (com o resumo) por alguns segundos.
+    static let agentsOpenOnFinish = Key<Bool>("agentsOpenOnFinish", default: true)
     static let agentsCompletionSound = Key<Bool>("agentsCompletionSound", default: true)
     static let agentsCompletionSoundName = Key<String>("agentsCompletionSoundName", default: "Bottle")
 

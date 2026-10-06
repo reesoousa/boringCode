@@ -318,21 +318,10 @@ struct AgentSession: Identifiable, Equatable {
     }
 }
 
-/// Aviso curto que aparece por baixo do notch fechado.
-struct AgentPeek: Equatable, Identifiable {
-    enum Kind: Equatable {
-        case approval
-        case question
-        case done
-        case error
-    }
-
-    let id: String
-    let kind: Kind
+/// Um turno terminou: o notch abre no cartão dessa sessão.
+struct AgentFinishRequest: Equatable {
+    let id: UUID
     let sessionID: String
-    let agent: AgentKind
-    let title: String
-    let detail: String?
 }
 
 // MARK: - Payload dos hooks

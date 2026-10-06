@@ -158,9 +158,10 @@ Decisões de produto (definidas pelo dono):
   - só música → capa à esquerda, espectro à direita (original).
   - música + agente → música à esquerda (interações normais), **mascote do agente no lugar do espectro**.
   - só agente → mascote à esquerda, um quadradinho por sessão à direita (cor = status; pulsa quando espera você).
-  - **Aviso por baixo** (decisão do dono, 2026-10-05: "quando for algo importante, informação direto no notch"):
-    aprovação/pergunta (fica até responder), terminou (resumo do `last_assistant_message`, 6 s) e erro. O notch
-    cresce para baixo com mola e alarga 56 pt de cada lado. Ajuste `agentsClosedPeek`.
+  - Mascote pequeno (18×10 pt no slot do espectro): o dono achou o grande "pesado" do lado do notch.
+  - **Sem avisos finos por baixo do notch** (testado e rejeitado pelo dono em 2026-10-05: "muito quadrado, perdeu o
+    design system"). Algo importante abre o **cartão grande**: aprovação/pergunta abre e fica até responder; fim de
+    turno/erro abre com o resumo por 5 s e fecha sozinho (se você não pegou o notch). Ajuste `agentsOpenOnFinish`.
 - **Hover nas áreas do agente** abre o notch direto na aba Agentes; esquerda/centro/arrastar arquivo = normal.
 - **Perguntas (AskUserQuestion)** respondidas no notch (opções + "Outra…"); ExitPlanMode vira aprovação.
 - **Nome:** tudo que o usuário vê diz "boringCode" (traduções no xcstrings, chaves iguais ao upstream).
@@ -177,7 +178,8 @@ Decisões de produto (definidas pelo dono):
   braços caídos + tremor (erro), respira e pisca parado. Estático com Reduzir movimento. Ícone da aba: `>_` (`AgentPromptGlyph`).
 - **Aba Agentes = cartão de foco** (referência do dono: Coucou, github.com/Louis-CFM/coucou, MIT — sem o personagem
   Mochi): mascote à esquerda, passos do turno à direita (últimos 3: verbo + alvo, +N −M nas edições, atual com
-  brilho), coluna com as outras sessões. O cartão vira o pedido: aprovação (descrição + comando + Recusar /
+  brilho), coluna com **todas** as sessões em ordem fixa (a mais antiga em cima), a do cartão destacada — clicar
+  troca o cartão (o dono não quis uma sumindo e outra entrando). O cartão vira o pedido: aprovação (descrição + comando + Recusar /
   Sempre permitir / Aprovar; plano = Continuar planejando / Aprovar plano), pergunta (escolha única responde no
   toque), terminou (resumo + Abrir terminal / OK) e erro. Brilho colorido na base por situação.
 - **Som sutil** ao concluir (som do sistema, padrão Bottle, volume 0,35).
@@ -203,7 +205,7 @@ Arquitetura:
   liga o módulo de agentes.
 - `AgentSessionStore` (@MainActor) = reducer de eventos → `AgentSession` (status, passos, resumo final, TTY, PID).
   `AgentActivity.swift` traduz ferramenta → passo (`AgentStepParser`: tipo, alvo, `description` do Bash, diff +N −M
-  pelo `difference(from:)`); `closedPeek` decide o aviso do notch fechado. "Sempre permitir" devolve
+  pelo `difference(from:)`); `finishRequest` abre o notch no fim do turno e `selectedSessionID` escolhe o cartão. "Sempre permitir" devolve
   `permission_suggestions` como `updatedPermissions` (só Claude; o Codex recusa). Codex continua só com os 4 hooks
   (PreToolUse nele enche o terminal de log, como o Open Island também evita).
   Poda sessões cujo PID morreu. `AgentTerminalFocus` = AppleScript por TTY / abrir pasta no VS Code.

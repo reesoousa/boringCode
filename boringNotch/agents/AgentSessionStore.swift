@@ -25,6 +25,10 @@ final class AgentSessionStore: ObservableObject {
     @Published private(set) var expandRequest: UUID?
     /// Última vez que uma sessão terminou (Stop) — o indicador mostra um ✓ rápido.
     @Published private(set) var lastCompletion: Date?
+    /// Muda quando um turno termina (ou falha) — o notch abre no cartão com o resumo.
+    @Published private(set) var finishRequest: AgentFinishRequest?
+    /// Sessão mostrada no cartão grande da aba (escolhida na lista, ou a que acabou de terminar).
+    @Published var selectedSessionID: String?
 
     private let server = AgentHookServer()
     private var pendingConnections: [UUID: AgentHookConnection] = [:]
@@ -33,7 +37,9 @@ final class AgentSessionStore: ObservableObject {
     private let log = Logger(subsystem: Bundle.main.bundleIdentifier ?? "boringcode", category: "AgentSessionStore")
 
     /// Por quanto tempo o ✓ de "concluído" (e o aviso com o resumo) fica no notch fechado.
-    static let completionFlashDuration: TimeInterval = 6
+    static let completionFlashDuration: TimeInterval = 5
+    /// Por quanto tempo o cartão de "terminou" fica aberto sozinho.
+    static let finishDisplayDuration: TimeInterval = 5
 
     private init() {
         server.onRequest = { [weak self] request, connection in
@@ -134,47 +140,6 @@ final class AgentSessionStore: ObservableObject {
     /// Sessão que o notch fechado representa (a mais urgente; senão a mais recente).
     var closedIndicatorSession: AgentSession? {
         activeSessions.max(by: { $0.status.priority < $1.status.priority }) ?? sessions.first
-    }
-
-    /// Aviso que cresce por baixo do notch fechado quando algo importante acontece:
-    /// pedido de aprovação, pergunta, fim do turno (com o resumo) ou erro.
-    var closedPeek: AgentPeek? {
-        if let session = sessions.first(where: \.needsAnswer) {
-            if let permission = session.pendingPermission {
-                return AgentPeek(
-                    id: permission.id.uuidString, kind: .approval, sessionID: session.id, agent: session.agent,
-                    title: permission.headline(agent: session.agent),
-                    detail: permission.detail.map { detail in
-                        // Só cabe uma linha: "…" avisa que o comando continua (o cartão mostra tudo).
-                        detail.contains(where: \.isNewline) ? detail.singleLine + " …" : detail
-                    } ?? permission.target ?? permission.summary
-                )
-            }
-            if let question = session.pendingQuestion {
-                return AgentPeek(
-                    id: question.id.uuidString, kind: .question, sessionID: session.id, agent: session.agent,
-                    title: String(localized: "\(session.agent.displayName) has a question", comment: "Agent question headline"),
-                    detail: question.questions.first?.question.singleLine
-                )
-            }
-        }
-        guard let lastCompletion, Date().timeIntervalSince(lastCompletion) < Self.completionFlashDuration,
-              let session = sessions.first(where: { ($0.status == .done || $0.status == .error) && $0.updatedAt >= lastCompletion })
-        else { return nil }
-        if session.status == .error {
-            return AgentPeek(
-                id: "error-\(session.id)-\(lastCompletion.timeIntervalSince1970)", kind: .error, sessionID: session.id,
-                agent: session.agent,
-                title: String(localized: "\(session.projectName) stopped", comment: "Agent session ended with an error"),
-                detail: session.errorMessage
-            )
-        }
-        return AgentPeek(
-            id: "done-\(session.id)-\(lastCompletion.timeIntervalSince1970)", kind: .done, sessionID: session.id,
-            agent: session.agent,
-            title: String(localized: "\(session.projectName) is done", comment: "Agent finished its turn"),
-            detail: session.lastMessage
-        )
     }
 
     /// O que o indicador do notch fechado deve mostrar (nil = nada, volta o espectro).
@@ -375,7 +340,8 @@ final class AgentSessionStore: ObservableObject {
             }
         case "Stop":
             // Só avisa se algo estava de fato em andamento (não num Stop repetido).
-            if session.status.isActive { AgentCompletionSound.play() }
+            let wasActive = session.status.isActive
+            if wasActive { AgentCompletionSound.play() }
             dropPermissions(of: &session)
             session.status = .done
             session.activity = nil
@@ -387,6 +353,7 @@ final class AgentSessionStore: ObservableObject {
             session.outcomeAcknowledged = false
             lastCompletion = now
             scheduleIndicatorRefresh()
+            if wasActive { requestFinish(session.id) }
         case "StopFailure":
             dropPermissions(of: &session)
             session.status = .error
@@ -394,6 +361,7 @@ final class AgentSessionStore: ObservableObject {
             session.subagents = 0
             finishSteps(of: &session, as: .failed)
             session.outcomeAcknowledged = false
+            requestFinish(session.id)
             lastCompletion = now
             scheduleIndicatorRefresh()
         case "SubagentStart":
@@ -415,6 +383,14 @@ final class AgentSessionStore: ObservableObject {
 
         upsert(session)
         if !holdConnection { connection.respond(nil) }
+    }
+
+    /// Mostra no cartão a sessão que acabou de terminar e pede para o notch abrir.
+    private func requestFinish(_ sessionID: String) {
+        // Se outra sessão espera aprovação, o cartão é dela — não troca.
+        guard !sessions.contains(where: { $0.id != sessionID && $0.needsAnswer }) else { return }
+        selectedSessionID = sessionID
+        finishRequest = AgentFinishRequest(id: UUID(), sessionID: sessionID)
     }
 
     private func applyContext(_ headers: [String: String], to session: inout AgentSession) {

@@ -32,9 +32,9 @@ struct AgentsSettingsView: View {
                     Text("Open the notch when an agent needs approval")
                 }
                 .disabled(!agentsEnabled)
-                Defaults.Toggle(key: .agentsClosedPeek) {
-                    Text("Show important updates below the closed notch")
-                    Text("Approvals, questions, errors and a summary of what the agent did when it finishes.")
+                Defaults.Toggle(key: .agentsOpenOnFinish) {
+                    Text("Open the notch when an agent finishes")
+                    Text("Shows a summary of what it did for a few seconds, then closes.")
                 }
                 .disabled(!agentsEnabled)
                 Defaults.Toggle(key: .agentsCompletionSound) {
