@@ -188,6 +188,9 @@ Decisões de produto (definidas pelo dono):
 - **Nome:** tudo que o usuário vê diz "boringCode" (traduções no xcstrings, chaves iguais ao upstream).
   Sobre credita Boring Notch e Open Island.
 - **Pedido de aprovação** expande o notch sozinho na aba Agentes e fecha sozinho quando resolvido.
+  Tem prioridade sobre notificações na tela. Notificações do sistema do próprio Claude/Codex (app ou terminal/editor
+  falando de Claude/Codex) esperam 1,5 s e são descartadas se o boringCode já acompanha a sessão pelos hooks
+  (`handlesAgentNotifications`); senão aparecem normalmente.
 - Tudo **ligado por padrão** (público-alvo: devs). Configurações em Ajustes › "Agentes de IA".
 - **Agentes/hosts:** Claude Code (Terminal/iTerm, extensão VS Code/Cursor, app Claude) e Codex
   (CLI, VS Code, app Codex = `ChatGPT.app`, bundle `com.openai.codex`, `codex://threads/<id>`).
