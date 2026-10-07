@@ -8,9 +8,11 @@
 //  Como no terminal (meio bloco = meia célula), cada pixel é duas vezes mais alto que largo.
 //  Cada estado tem sua pose: anda quando roda comandos, digita quando edita,
 //  passa os olhos quando lê, acena quando precisa de você e dá um pulinho ao
-//  terminar. Parado (Reduzir movimento), fica na pose do estado.
+//  terminar. Parado (Reduzir movimento), fica na pose do estado. A animação roda no
+//  Core Animation (AgentMascotLayer): custo zero para o app enquanto o mascote anda.
 //
 
+import AppKit
 import SwiftUI
 
 /// Como o mascote se mexe enquanto o agente trabalha.
@@ -33,7 +35,6 @@ struct AgentMascot: View {
     var seed: Double = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.displayScale) private var displayScale
 
     static let columns: CGFloat = 18
     static let rows: CGFloat = 5
@@ -42,40 +43,241 @@ struct AgentMascot: View {
     static let aspectRatio = columns / (rows * pixelAspect)
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
-            let pose = AgentMascotPose.make(
-                agent: agent,
-                status: status,
-                motion: motion,
-                time: reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate + seed,
-                sinceChange: reduceMotion ? 10 : context.date.timeIntervalSince(statusChangedAt)
-            )
-            Canvas { canvas, size in
-                draw(pose, in: &canvas, size: size)
-            }
-            .scaleEffect(x: 1, y: pose.breath, anchor: .bottom)
-            .visualEffect { [dx = pose.dx, dy = pose.dy] content, proxy in
-                let unit = min(proxy.size.width / Self.columns, proxy.size.height / (Self.rows * Self.pixelAspect))
-                return content.offset(x: dx * unit, y: dy * unit * Self.pixelAspect)
-            }
-        }
+        AgentMascotLayer(config: .init(
+            agent: agent,
+            status: status,
+            motion: status == .running ? motion : .idle,
+            statusChangedAt: statusChangedAt,
+            seed: seed,
+            animated: !reduceMotion
+        ))
         .aspectRatio(Self.aspectRatio, contentMode: .fit)
         .accessibilityHidden(true)
     }
+}
 
-    private func draw(_ pose: AgentMascotPose, in canvas: inout GraphicsContext, size: CGSize) {
-        // Pixel inteiro na tela (sem borrão nas bordas), centralizado no espaço disponível.
-        let raw = min(size.width / Self.columns, size.height / (Self.rows * Self.pixelAspect))
-        let u = max(1 / displayScale, (raw * displayScale).rounded(.down) / displayScale)
-        let v = u * Self.pixelAspect
-        let originX = ((size.width - u * Self.columns) / 2 * displayScale).rounded() / displayScale
-        let originY = ((size.height - v * Self.rows) / 2 * displayScale).rounded() / displayScale
+// MARK: - Animação no Core Animation
 
-        var path = Path()
-        for pixel in pose.pixels {
-            path.addRect(CGRect(x: originX + CGFloat(pixel.x) * u, y: originY + CGFloat(pixel.y) * v, width: u, height: v))
+/// O mascote vive numa camada do Core Animation: os quadros de cada estado são desenhados uma
+/// vez (imagens de 18×10 px) e o servidor de renderização os troca sozinho, com os deslocamentos
+/// (passinho, respiração, pulinho) interpolados na taxa da tela. O app não trabalha enquanto o
+/// mascote anda — antes, cada quadro redesenhava a janela do notch (≈3% de CPU num M4 Pro).
+private struct AgentMascotLayer: NSViewRepresentable {
+    struct Config: Equatable {
+        let agent: AgentKind
+        let status: AgentSessionStatus?
+        let motion: AgentMascotMotion
+        let statusChangedAt: Date
+        let seed: Double
+        let animated: Bool
+    }
+
+    let config: Config
+
+    func makeNSView(context: Context) -> MascotView { MascotView() }
+
+    func updateNSView(_ view: MascotView, context: Context) { view.configure(config) }
+
+    final class MascotView: NSView {
+        private let sprite = CALayer()
+        private var config: Config?
+        private var builtSize: CGSize = .zero
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            wantsLayer = true
+            sprite.magnificationFilter = .nearest
+            sprite.minificationFilter = .nearest
+            sprite.contentsGravity = .resize
+            sprite.anchorPoint = CGPoint(x: 0.5, y: 0)  // respira a partir dos pés
+            layer?.addSublayer(sprite)
         }
-        canvas.fill(path, with: .color(agent.tint))
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) não usado") }
+
+        func configure(_ new: Config) {
+            guard new != config else { return }
+            let statusChanged = config != nil && config?.status != new.status
+            config = new
+            rebuild(intro: statusChanged)
+        }
+
+        override func layout() {
+            super.layout()
+            guard bounds.size != builtSize else { return }
+            rebuild(intro: false)
+        }
+
+        override func viewDidChangeBackingProperties() {
+            super.viewDidChangeBackingProperties()
+            builtSize = .zero
+            needsLayout = true
+        }
+
+        /// Pixel inteiro na tela (sem borrão), centralizado no espaço disponível.
+        private func spriteFrame() -> (frame: CGRect, unit: CGFloat) {
+            let scale = window?.backingScaleFactor ?? 2
+            let raw = min(bounds.width / AgentMascot.columns, bounds.height / (AgentMascot.rows * AgentMascot.pixelAspect))
+            let u = max(1 / scale, (raw * scale).rounded(.down) / scale)
+            let size = CGSize(width: u * AgentMascot.columns, height: u * AgentMascot.rows * AgentMascot.pixelAspect)
+            let x = ((bounds.width - size.width) / 2 * scale).rounded() / scale
+            let y = ((bounds.height - size.height) / 2 * scale).rounded() / scale
+            return (CGRect(origin: CGPoint(x: x, y: y), size: size), u)
+        }
+
+        private func rebuild(intro: Bool) {
+            guard let config, bounds.width > 0, bounds.height > 0 else { return }
+            builtSize = bounds.size
+            let (frame, unit) = spriteFrame()
+
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            sprite.removeAllAnimations()
+            sprite.bounds = CGRect(origin: .zero, size: frame.size)
+            sprite.position = CGPoint(x: frame.midX, y: frame.minY)
+            sprite.transform = CATransform3DIdentity
+
+            let tint = NSColor(config.agent.tint)
+            // Reduzir movimento: só a pose do estado, parada.
+            guard config.animated else {
+                let pose = AgentMascotPose.make(agent: config.agent, status: config.status, motion: config.motion, time: 0, sinceChange: 10)
+                sprite.contents = AgentMascotFrames.image(pose.pixels, tint: tint)
+                CATransaction.commit()
+                return
+            }
+
+            let now = Date()
+            let sinceChange = now.timeIntervalSince(config.statusChangedAt)
+            let introLength = 0.9
+            var loopBegin: CFTimeInterval = 0
+
+            // Pulinho/tremor logo depois de mudar de estado: uma passada única antes do ciclo.
+            if intro || sinceChange < introLength {
+                let start = max(0, sinceChange)
+                if start < introLength {
+                    let samples = AgentMascotFrames.samples(config, unit: unit, from: start, to: introLength, absolute: false, tint: tint)
+                    add(samples, duration: introLength - start, repeats: false, beginTime: 0)
+                    loopBegin = introLength - start
+                }
+            }
+
+            let length = AgentMascotFrames.loopLength(config)
+            let samples = AgentMascotFrames.samples(config, unit: unit, from: 0, to: length, absolute: true, tint: tint)
+            sprite.contents = samples.images.first
+            add(samples, duration: length, repeats: true, beginTime: loopBegin)
+            CATransaction.commit()
+        }
+
+        private func add(_ samples: AgentMascotFrames.Samples, duration: Double, repeats: Bool, beginTime: CFTimeInterval) {
+            let begin = beginTime > 0 ? sprite.convertTime(CACurrentMediaTime(), from: nil) + beginTime : 0
+            let suffix = repeats ? "loop" : "intro"
+
+            let contents = CAKeyframeAnimation(keyPath: "contents")
+            contents.values = samples.images
+            contents.keyTimes = samples.keyTimes as [NSNumber]
+            contents.calculationMode = .discrete
+            contents.duration = duration
+
+            let transform = CAKeyframeAnimation(keyPath: "transform")
+            transform.values = samples.transforms.map { NSValue(caTransform3D: $0) }
+            transform.keyTimes = samples.transformTimes as [NSNumber]
+            transform.calculationMode = .linear
+            transform.duration = duration
+
+            for animation in [contents, transform] {
+                animation.repeatCount = repeats ? .infinity : 1
+                animation.beginTime = begin
+                animation.isRemovedOnCompletion = !repeats
+                animation.fillMode = repeats ? .removed : .forwards
+                sprite.add(animation, forKey: "\(animation.keyPath ?? "")-\(suffix)")
+            }
+        }
+    }
+}
+
+/// Quadros pré-desenhados do mascote.
+private enum AgentMascotFrames {
+    struct Samples {
+        var images: [CGImage] = []
+        var keyTimes: [Double] = []
+        var transforms: [CATransform3D] = []
+        var transformTimes: [Double] = []
+    }
+
+    /// Duração do ciclo de cada estado (cobre os passos e pelo menos uma piscada).
+    static func loopLength(_ config: AgentMascotLayer.Config) -> Double {
+        switch config.status {
+        case .running?:
+            switch config.motion {
+            case .walking: 4.2      // 7 passos de 0,6 s
+            case .typing: 4.08      // 12 batidas de 0,34 s
+            case .scanning: 5.4     // 3 varridas de 1,8 s
+            case .thinking, .idle: 6.4
+            }
+        case .waitingApproval?: 3.8  // 5 acenos de 0,76 s
+        case .waitingInput?: 10
+        default: 8.6                 // duas piscadas de 4,3 s; olhadinha para os lados no meio
+        }
+    }
+
+    /// Amostra o ciclo: imagens só quando a pose muda; deslocamento a 30 por segundo
+    /// (o Core Animation interpola entre eles na taxa da tela).
+    static func samples(_ config: AgentMascotLayer.Config, unit: CGFloat, from start: Double, to end: Double,
+                        absolute: Bool, tint: NSColor) -> Samples {
+        var result = Samples()
+        var lastKey: [Int] = []
+        let length = end - start
+        let step = 1.0 / 30
+        var t = start
+        while t <= end + 0.0001 {
+            let time = absolute ? t + config.seed : 10_000 + config.seed + t
+            let sinceChange = absolute ? 10 : t
+            let pose = AgentMascotPose.make(agent: config.agent, status: config.status, motion: config.motion,
+                                            time: time, sinceChange: sinceChange)
+            let progress = length > 0 ? min(1, (t - start) / length) : 0
+            let key = pose.pixels.map { $0.y * 32 + $0.x }
+            if key != lastKey, t < end - 0.0001 || result.images.isEmpty {
+                result.images.append(image(pose.pixels, tint: tint))
+                result.keyTimes.append(progress)
+                lastKey = key
+            }
+            // Pose diz "para cima" com dy negativo (tela); a camada tem y para cima.
+            var transform = CATransform3DMakeTranslation(pose.dx * unit, -pose.dy * unit * AgentMascot.pixelAspect, 0)
+            transform = CATransform3DScale(transform, 1, pose.breath, 1)
+            result.transforms.append(transform)
+            result.transformTimes.append(progress)
+            t += step
+        }
+        if result.keyTimes.last.map({ $0 < 1 }) ?? true, let last = result.images.last {
+            // keyTimes de "discrete" precisam terminar em 1.
+            result.images.append(last)
+            result.keyTimes.append(1)
+        }
+        return result
+    }
+
+    private static let cache = NSCache<NSString, CGImage>()
+
+    /// A pose como imagem de 18×10 px (cada pixel da grade = 1×2 px), na cor do agente.
+    static func image(_ pixels: [(x: Int, y: Int)], tint: NSColor) -> CGImage {
+        let rgb = tint.usingColorSpace(.sRGB) ?? tint
+        let key = "\(rgb.redComponent),\(rgb.greenComponent),\(rgb.blueComponent):"
+            + pixels.map { "\($0.x).\($0.y)" }.joined(separator: ",") as NSString
+        if let cached = cache.object(forKey: key) { return cached }
+
+        let width = Int(AgentMascot.columns), height = Int(AgentMascot.rows * AgentMascot.pixelAspect)
+        let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.setFillColor(rgb.cgColor)
+        let rowHeight = Int(AgentMascot.pixelAspect)
+        for pixel in pixels {
+            // CGContext tem origem embaixo; a grade é de cima para baixo.
+            context.fill(CGRect(x: pixel.x, y: height - (pixel.y + 1) * rowHeight, width: 1, height: rowHeight))
+        }
+        let image = context.makeImage()!
+        cache.setObject(image, forKey: key)
+        return image
     }
 }
 
@@ -219,8 +421,6 @@ struct AgentMascotBadge: View {
     let status: AgentSessionStatus
     var size: CGFloat = 16
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     private var symbol: String? {
         switch status {
         case .waitingApproval: "exclamationmark"
@@ -244,7 +444,7 @@ struct AgentMascotBadge: View {
                 .padding(size * 0.12)
                 .background(Circle().fill(.black))
                 .frame(width: size, height: size)
-                .symbolEffect(.pulse, options: .repeating, isActive: status == .waitingApproval && !reduceMotion)
+                .agentPulse(status == .waitingApproval, minimum: 0.55, duration: 0.8)
                 .transition(.scale(scale: 0.4).combined(with: .opacity))
         }
     }

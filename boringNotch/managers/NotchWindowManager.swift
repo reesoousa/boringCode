@@ -140,10 +140,15 @@ final class NotchWindowManager {
             window.disableSkyLight()
         }
 
-        window.contentView = NSHostingView(
+        let hostingView = NSHostingView(
             rootView: ContentView()
                 .environmentObject(viewModel)
         )
+        // A janela tem tamanho fixo (windowSize): sem isso, cada quadro de animação fazia o
+        // NSHostingView recalcular tamanho mínimo/ideal e refazer o layout da árvore inteira
+        // (era o maior gasto de CPU com o notch fechado).
+        hostingView.sizingOptions = []
+        window.contentView = hostingView
 
         window.orderFrontRegardless()
         NotchSpaceManager.shared.notchSpace.windows.insert(window)

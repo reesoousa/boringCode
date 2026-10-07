@@ -74,8 +74,6 @@ struct AgentSessionCells: View {
     let sessions: [AgentSession]
     let size: CGFloat
 
-    @State private var pulse = false
-
     private var rows: [[AgentSession?]] {
         let visible = sessions.count > 9 ? Array(sessions.prefix(8)) : sessions
         var cells: [AgentSession?] = visible
@@ -100,7 +98,6 @@ struct AgentSessionCells: View {
                 }
             }
         }
-        .onAppear { pulse = true }
         .accessibilityElement()
         .accessibilityLabel(Text("\(sessions.count) agent sessions"))
     }
@@ -113,8 +110,7 @@ struct AgentSessionCells: View {
             shape
                 .fill(session.status == .running ? session.agent.tint : session.status.cellTint)
                 .frame(width: cellSize, height: cellSize)
-                .opacity(waiting ? (pulse ? 1 : 0.35) : 1)
-                .animation(waiting ? .easeInOut(duration: 0.7).repeatForever(autoreverses: true) : .default, value: pulse)
+                .agentPulse(waiting)
         } else {
             shape
                 .fill(Color.white.opacity(0.14))
