@@ -4,8 +4,9 @@
 //
 //  Leituras baratas direto do kernel, sem processos externos: CPU pelos ticks
 //  do host (mach), disco pelo volume de inicialização e rede pelos contadores
-//  de 64 bits das interfaces (sysctl NET_RT_IFLIST2). Cada leitura custa
-//  microssegundos; o monitor só chama enquanto a aba está aberta.
+//  de 64 bits das interfaces (sysctl NET_RT_IFLIST2); temperatura, ventoinhas,
+//  watts e GPU em `SystemSensors.swift`. Cada leitura custa microssegundos (a
+//  temperatura, ~10 ms esperando o chip); o monitor só chama com a aba aberta.
 //
 
 import Darwin
@@ -23,6 +24,15 @@ struct SystemSample: Equatable, Sendable {
     /// Bytes em uso (como o "Memória usada" do Monitor de Atividade) e total físico.
     var memoryUsed: Int64?
     var memoryTotal: Int64 = Int64(ProcessInfo.processInfo.physicalMemory)
+    /// 0…1.
+    var gpu: Double?
+    /// °C do chip.
+    var temperature: Double?
+    /// Rotação média das ventoinhas (rpm) e a máxima delas; nil em Mac sem ventoinha.
+    var fanSpeed: Double?
+    var fanMaxSpeed: Double?
+    /// Consumo do Mac inteiro, em watts.
+    var power: Double?
 
     var memoryFraction: Double? {
         guard let used = memoryUsed, memoryTotal > 0 else { return nil }
@@ -39,6 +49,10 @@ actor SystemSampler {
     private var previousTicks: (busy: UInt64, total: UInt64)?
     private var previousBytes: (received: UInt64, sent: UInt64, time: TimeInterval)?
     private var cachedStorage: (total: Int64, available: Int64, time: TimeInterval)?
+    // Abertos na primeira leitura e soltos quando a aba fecha (`stop`).
+    private var chipSensors: ChipTemperatureSensors?
+    private var smc: SMCReader?
+    private var smcOpened = false
 
     /// O disco muda devagar: relê no máximo a cada 10 s.
     private static let storageInterval: TimeInterval = 10
@@ -52,7 +66,16 @@ actor SystemSampler {
             result.storageTotal = storage.total
             result.storageAvailable = storage.available
         }
+        result.gpu = GPUStatistics.utilization()
+        readSensors(into: &result)
         return result
+    }
+
+    /// Fecha o SMC e os sensores (a aba fechou).
+    func stop() {
+        chipSensors = nil
+        smc = nil
+        smcOpened = false
     }
 
     /// Zera o histórico (ao reabrir a aba, o primeiro intervalo não conta o tempo fechado).
@@ -146,6 +169,29 @@ actor SystemSampler {
             }
         }
         return (received, sent)
+    }
+
+    // MARK: - Sensores
+
+    private func readSensors(into result: inout SystemSample) {
+        if chipSensors == nil { chipSensors = ChipTemperatureSensors() }
+        if !smcOpened {
+            smc = SMCReader()
+            smcOpened = true
+        }
+
+        result.temperature = chipSensors?.read()
+            ?? smc?.intelChipTemperature()
+
+        if let smc {
+            let fans = Int(smc.value("FNum") ?? 0)
+            if fans > 0 {
+                let speeds = (0..<fans).compactMap { smc.value("F\($0)Ac") }
+                if !speeds.isEmpty { result.fanSpeed = speeds.reduce(0, +) / Double(speeds.count) }
+                result.fanMaxSpeed = (0..<fans).compactMap { smc.value("F\($0)Mx") }.max()
+            }
+            if let watts = smc.value("PSTR"), watts > 0 { result.power = watts }
+        }
     }
 
     // MARK: - Disco

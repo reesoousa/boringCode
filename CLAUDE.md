@@ -267,13 +267,21 @@ continua o serviço padrão do Shelf (LocalSend se escolhe em Ajustes › Shelf)
 
 - Aba `NotchViews.monitor`, aberta pelo botão do cabeçalho (à esquerda do espelho; os dois aparecem na Home e no
   Monitor para o botão não mudar de lugar). Não entra na barra de abas.
+- Cartões: CPU, GPU, memória, temperatura (+ ventoinhas), armazenamento, bateria, energia (W), download e upload.
 - `SystemSampler` (actor): CPU por `host_statistics` (ticks), memória por `host_statistics64` (apps + wired +
   comprimida, como o Monitor de Atividade), bateria reaproveita `BatteryStatusViewModel` (some sem bateria interna), disco por `volumeAvailableCapacityForImportantUsage`
   (relê a cada 10 s), rede por `sysctl NET_RT_IFLIST2` (contadores de 64 bits de `en*`/`pdp_ip*`; VPN fica de fora).
-- `SystemMonitor` só mede entre `begin`/`end` (onAppear/onDisappear da aba): fechado, custo zero. Escala das barras de
-  rede = pico recente com decaimento (mínimo 256 KB/s).
-- Visual: grade 3×2 (4 métricas → 2×2), cartões de canto 12 (`white 0.06`), número 17 pt + unidade 11 pt cinza, barra do
-  player (4 pt, trilho cinza 0.3, branco). Entrada em cascata diagonal (desfoque → nítido, mola) e `CountingText`
+- Sensores (`SystemSensors.swift`, sem permissão): temperatura do chip = média dos HID "PMU tdie*" (um por nome; M1/M2
+  sem tdie → "ACC MTR"; Intel → SMC `TC0P`…), ventoinhas `FNum`/`F<n>Ac`/`F<n>Mx` e watts do Mac `PSTR` pelo SMC
+  (struct de 80 bytes com padding explícito: o Swift não alinha structs aninhadas como o C), GPU pelo
+  `PerformanceStatistics` do `IOAccelerator`. `SystemSensorSupport` detecta uma vez o que o Mac tem (Ajustes e grade
+  só oferecem o que existe). A temperatura espera o chip (~10 ms, ~0,5 ms de CPU), por isso fica no actor.
+- `SystemMonitor` só mede entre `begin`/`end` (onAppear/onDisappear da aba): fechado, custo zero (`end` fecha o SMC).
+  Escala das barras de rede/watts = pico recente com decaimento (mínimo 256 KB/s / 30 W).
+- Visual: até 6 cartões em 3×2 (4 → 2×2); 7–8 em 4×2 com o cartão compacto (nome em cima; número e detalhe embaixo,
+  detalhe curto `shortDetail` ou nenhum se não couber). Máximo 8 (`SystemMetric.maximumShown`): nos Ajustes os
+  desligados travam com 8 ligados; Energia vem desligada. Cantos 12 (`white 0.06`), número 17 pt + unidade 11 pt cinza,
+  barra do player (4 pt, trilho cinza 0.3, branco). Entrada em cascata diagonal (desfoque → nítido, mola) e `CountingText`
   (Animatable) conta do zero junto com a barra; respeita Reduzir movimento. Ajustes › Monitor do sistema.
 
 ## Encaixe de janelas (`boringNotch/windowsnap/`)
