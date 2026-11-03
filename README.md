@@ -20,7 +20,7 @@
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-suportado-D97757">
   <img alt="Codex" src="https://img.shields.io/badge/Codex-suportado-4AA3DF">
   <img alt="LocalSend" src="https://img.shields.io/badge/LocalSend-integrado-2DAE9A">
-  <img alt="Versão" src="https://img.shields.io/badge/vers%C3%A3o-0.5.0%20Concierge%20Cat-8A8A8E">
+  <img alt="Versão" src="https://img.shields.io/badge/vers%C3%A3o-1.0.0%20Mindfulness%20Cat-8A8A8E">
   <a href="LICENSE"><img alt="GPL-3.0" src="https://img.shields.io/badge/licen%C3%A7a-GPL--3.0-2F7D32"></a>
 </p>
 
