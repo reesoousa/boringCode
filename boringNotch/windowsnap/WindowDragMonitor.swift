@@ -302,7 +302,7 @@ final class WindowDragMonitor: ObservableObject {
 
     /// Telas que têm a janela do notch.
     private func notchScreens() -> [NSScreen] {
-        if Defaults[.showOnAllDisplays] { return NSScreen.screens }
+        if Defaults[.displayMode] == .allDisplays { return NSScreen.screens }
         let selected = NSScreen.screen(withUUID: BoringViewCoordinator.shared.selectedScreenUUID) ?? NSScreen.main
         return selected.map { [$0] } ?? []
     }

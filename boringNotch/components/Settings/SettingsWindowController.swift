@@ -46,7 +46,7 @@ class SettingsWindowController: NSWindowController {
     private func setupWindow() {
         guard let window, let camera else { return }
 
-        window.title = "boringCode Settings"
+        window.title = String(localized: "boringCode Settings")
         window.titlebarAppearsTransparent = false
         window.titleVisibility = .visible
         window.toolbarStyle = .unified
