@@ -173,5 +173,5 @@ struct AboutView: View {
 
 /// Nome da versão do boringCode (cada versão ganha um apelido, como no Boring Notch).
 enum BoringCodeRelease {
-    static let name = "Concierge Cat 🐱🛎️"
+    static let name = "Mindfulness Cat 🐱🧘"
 }

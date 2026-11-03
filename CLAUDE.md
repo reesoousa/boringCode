@@ -16,13 +16,11 @@ recursos do [Open Island](https://github.com/Octane0411/open-vibe-island): monit
 - Swift 5/6 + SwiftUI + AppKit, projeto Xcode (`boringNotch.xcodeproj`), macOS 14+.
 - App **sem sandbox** (ver "Módulo de agentes") + helper XPC (`BoringNotchXPCHelper/`)
   para trabalho privilegiado (Accessibility, brilho, notificações).
-- Versão atual: **0.5.0 "Concierge Cat"** (`MARKETING_VERSION` no projeto; apelido em
-  `BoringCodeRelease.name`, `AboutView.swift`).
-- **Releases em pausa (decisão do dono, 2026-10-01):** a 0.5.0 é a versão distribuída. A **próxima release é a
-  1.0**, um "big update". Até lá: nada de subir versão, gerar DMG, publicar Release ou appcast, mesmo com
-  features novas mergeadas na `dev` (quem tem a 0.5.0 receberia a atualização sozinho). O trabalho segue em
-  branches/PRs normalmente; a 1.0 só sai quando o dono pedir.
-  O que vai acumulando na `dev` fica listado em `docs/1.0.md`: todo PR de correção/feature acrescenta a sua linha.
+- Versão atual: **1.0.0 "Mindfulness Cat"** (`MARKETING_VERSION` no projeto; apelido em
+  `BoringCodeRelease.name`, `AboutView.swift`). A anterior, distribuída até a 1.0, era a 0.5.0 "Concierge Cat".
+- **Releases só quando o dono pedir** (decisão de 2026-10-01): features e correções mergeadas na `dev` não viram
+  versão sozinhas (quem tem o app receberia a atualização pelo Sparkle). O que entrou na 1.0 está em `docs/1.0.md`;
+  a lista vira as notas da versão (`dist/release-notes-v<versão>.md`).
 - SPM: Defaults (settings), Sparkle (updates), SkyLightWindow, Lottie, Pow, KeyboardShortcuts,
   LaunchAtLogin, swiftui-introspect, swift-collections, AsyncXPCConnection, MacroVisionKit.
 
