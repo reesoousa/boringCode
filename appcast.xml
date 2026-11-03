@@ -5,33 +5,41 @@
     <link>https://github.com/reesoousa/boringCode</link>
     <language>pt-BR</language>
     <item>
-      <title>boringCode 0.5.0 — Concierge Cat 🐱🛎️</title>
-      <pubDate>Thu, 01 Oct 2026 13:42:15 +0000</pubDate>
-      <sparkle:version>276</sparkle:version>
-      <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+      <title>boringCode 1.0.0 — Mindfulness Cat 🐱🧘</title>
+      <pubDate>Tue, 03 Nov 2026 19:33:39 +0000</pubDate>
+      <sparkle:version>277</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <sparkle:fullReleaseNotesLink>https://github.com/reesoousa/boringCode/releases/tag/v0.5.0</sparkle:fullReleaseNotesLink>
+      <sparkle:fullReleaseNotesLink>https://github.com/reesoousa/boringCode/releases/tag/v1.0.0</sparkle:fullReleaseNotesLink>
       <description><![CDATA[
 <style>body{font:13px -apple-system,sans-serif;line-height:1.45} h3{font-size:14px;margin:14px 0 6px} ul{padding-left:20px}</style>
-<p><strong>boringCode 0.5.0 "Concierge Cat" 🐱🛎️</strong>: recebe você bem na primeira abertura e, daqui pra frente, se atualiza sozinho.</p>
+<p><strong>boringCode 1.0 "Mindfulness Cat" 🐱🧘</strong>: o big update. O Clawd mora no notch, o clipboard ganha histórico, o monitor mede temperatura e GPU, e tudo ficou bem mais leve.</p>
 <h3>Novidades</h3>
 <ul>
-<li><strong>Atualizações automáticas.</strong> A partir desta versão, o boringCode avisa quando sai uma nova e instala com um clique. Não precisa mais baixar o DMG de novo.</li>
+<li><strong>Agentes muito mais claros.</strong> O Clawd, o robozinho do Claude Code, mora no notch e mostra o que o agente está fazendo: anda quando roda comandos, digita quando edita e acena quando precisa de você.</li>
 <ul>
-<li>Em Ajustes › Sobre, dá para escolher se ele procura e baixa sozinho.</li>
+<li>A aba Agentes mostra os passos ao vivo ("Lendo ContentView.swift", "Editando Store.swift +12 −3").</li>
+<li>O pedido de aprovação mostra a descrição do comando e tem o botão <strong>Sempre permitir</strong>.</li>
+<li>Quando o agente termina, o notch abre uns segundos com um resumo do que ele fez.</li>
+<li>Com várias sessões, todas ficam numa coluna e você escolhe qual ver.</li>
 </ul>
-<li><strong>Boas-vindas que já deixam tudo pronto.</strong> Na primeira abertura, uma tela por recurso pergunta se você quer usar e já pede a permissão do sistema na hora:</li>
+<li><strong>Histórico do clipboard</strong>, como o Win+V do Windows. A aba Clipboard mostra o que você copiou por último (textos, links, imagens e arquivos), com busca e filtros. Clique num item para colar direto no app em que você estava; <strong>⌃⌘V</strong> abre de qualquer lugar. Fica só no seu Mac e ignora gerenciadores de senha.</li>
+<li><strong>Monitor do sistema com mais medidores:</strong> além de CPU, memória, disco, bateria e rede, agora mostra <strong>GPU</strong>, <strong>temperatura do chip</strong> (com a rotação das ventoinhas nos Macs que têm) e, se você ligar, a <strong>energia</strong> em watts. Cabem 8 cartões; escolha quais em Ajustes › Monitor do sistema.</li>
+<li><strong>Escolher a tela do notch:</strong> a principal, a que você estiver usando (o notch acompanha) ou todas.</li>
+<li><strong>Capa das músicas do Apple Music por streaming</strong>, que antes vinham sem imagem, e opção de esconder o ícone do app em cima da capa.</li>
+</ul>
+<h3>Mais leve e mais estável</h3>
 <ul>
-<li>agentes de IA (Claude Code e Codex);</li>
-<li>encaixe de janelas, notificações e volume/brilho no notch (Acessibilidade);</li>
-<li>LocalSend (Rede Local), espelho (câmera), calendário e lembretes, e o visualizador de áudio.</li>
-<li>"Agora não" deixa o recurso desligado, e dá para mudar tudo depois nos Ajustes.</li>
-</ul>
-<li><strong>Mais seguro:</strong> os ganchos dos agentes e a busca na rede local só ligam depois que você diz sim.</li>
-<li>Tudo da 0.4.0 continua: encaixe de janelas pelo notch, monitor do sistema, LocalSend no shelf, agentes no notch, música, calendário e shelf.</li>
+<li><strong>Quase nada de CPU parado:</strong> de ~16% para ~0,2% com o robozinho andando e música tocando, e metade da memória. Faz diferença em Mac mais antigo e na bateria.</li>
+<li>O pedido do Claude/Codex abre o cartão de aprovação, e não uma notificação comum.</li>
+<li>O notch volta para o topo se outro app tentar movê-lo (Rectangle, Raycast, AeroSpace, Stage Manager…).</li>
+<li>Só uma cópia do boringCode aberta por vez.</li>
+<li>A barra da música não começa mais cheia quando a faixa troca.</li>
+<li>O cartão de imagem do clipboard ficou no lugar, com miniatura limpa.</li>
+<li>Atualizado com as novidades do Boring Notch até novembro de 2026 (traduções, aviso de energia centralizado, Sparkle 2.10).</li>
 </ul>
       ]]></description>
-      <enclosure url="https://github.com/reesoousa/boringCode/releases/download/v0.5.0/boringCode-0.5.0.dmg" type="application/octet-stream" sparkle:edSignature="5UwPZxrBcR0iT15U8P3Q0J9jHGlFMCSrotjoiGjYVo6Zgeiewwe8zjpDQn29xiy7SZrIfiu3f32rmvzvYW15BA==" length="18576854" />
+      <enclosure url="https://github.com/reesoousa/boringCode/releases/download/v1.0.0/boringCode-1.0.0.dmg" type="application/octet-stream" sparkle:edSignature="7CWcY3F0YCF6ZS+cOhFph5iZZ18hTlKS+VreK8cdEy+etbJjQEHfu9eNgvlqpR7wzcqFFJGEBhU5EQZT5RDwDw==" length="19526707" />
     </item>
   </channel>
 </rss>
