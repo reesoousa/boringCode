@@ -36063,6 +36063,99 @@
           }
         }
       }
+    },
+    "GPU" : {
+      "shouldTranslate" : false
+    },
+    "Temperature" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temperatura"
+          }
+        }
+      }
+    },
+    "Power" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Energia"
+          }
+        }
+      }
+    },
+    "Fans off" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ventoinhas paradas"
+          }
+        }
+      }
+    },
+    "Fans %@ rpm" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ventoinhas %@ rpm"
+          }
+        }
+      }
+    },
+    "Normal" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normal"
+          }
+        }
+      }
+    },
+    "Warm" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Morno"
+          }
+        }
+      }
+    },
+    "Hot · slowing down" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quente · desacelerando"
+          }
+        }
+      }
+    },
+    "Very hot" : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muito quente"
+          }
+        }
+      }
+    },
+    "Up to 8 at a time. Temperature shows the chip and, on Macs with fans, how fast they spin. Power is what the whole Mac is drawing right now." : {
+      "localizations" : {
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Até 8 por vez. A temperatura é a do chip e, nos Macs com ventoinha, mostra a rotação delas. Energia é quanto o Mac inteiro está gastando agora."
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

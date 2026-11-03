@@ -18,9 +18,13 @@ final class SystemMonitor: ObservableObject {
     /// Picos recentes da rede (decaem devagar) — escala das barras de download/upload.
     @Published private(set) var downloadScale: Double = SystemMonitor.minimumNetworkScale
     @Published private(set) var uploadScale: Double = SystemMonitor.minimumNetworkScale
+    /// Pico recente do consumo (watts), mesma ideia da rede.
+    @Published private(set) var powerScale: Double = SystemMonitor.minimumPowerScale
 
     /// Abaixo disso a barra não "enche" com tráfego mínimo de fundo (256 KB/s).
     static let minimumNetworkScale: Double = 256 * 1024
+    /// Um Mac parado gasta 5–15 W: a barra só enche de verdade com carga.
+    static let minimumPowerScale: Double = 30
     /// Quanto o pico cai por segundo sem tráfego novo.
     private static let peakDecayPerSecond = 0.92
 
@@ -43,6 +47,7 @@ final class SystemMonitor: ObservableObject {
         guard viewers == 0 else { return }
         loop?.cancel()
         loop = nil
+        Task { await sampler.stop() }
     }
 
     private func run() async {
@@ -67,6 +72,7 @@ final class SystemMonitor: ObservableObject {
         merged.cpu = new.cpu ?? sample.cpu
         merged.download = new.download ?? sample.download
         merged.upload = new.upload ?? sample.upload
+        merged.temperature = new.temperature ?? sample.temperature
         if merged != sample { sample = merged }
 
         let decay = pow(Self.peakDecayPerSecond, max(1, elapsed))
@@ -74,6 +80,8 @@ final class SystemMonitor: ObservableObject {
         let up = max(Self.minimumNetworkScale, merged.upload ?? 0, uploadScale * decay)
         if down != downloadScale { downloadScale = down }
         if up != uploadScale { uploadScale = up }
+        let watts = max(Self.minimumPowerScale, merged.power ?? 0, powerScale * decay)
+        if watts != powerScale { powerScale = watts }
     }
 
     // MARK: - Texto
@@ -139,6 +147,44 @@ final class SystemMonitor: ObservableObject {
     static func memory(_ value: Int64?) -> String {
         guard let value else { return "—" }
         return memoryFormatter.string(fromByteCount: value)
+    }
+
+    private static let decimalFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 1
+        formatter.minimumFractionDigits = 1
+        return formatter
+    }()
+
+    private static let integerFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        return formatter
+    }()
+
+    /// Fahrenheit para quem usa o sistema americano (Ajustes › Geral › Idioma e Região).
+    static var usesFahrenheit: Bool { Locale.current.measurementSystem == .us }
+
+    /// "62" + "°C" (ou °F).
+    static func temperatureParts(_ celsius: Double) -> (number: String, unit: String) {
+        usesFahrenheit ? ("\(Int((celsius * 9 / 5 + 32).rounded()))", "°F") : ("\(Int(celsius.rounded()))", "°C")
+    }
+
+    /// "11,8" + "W".
+    static func wattsParts(_ watts: Double) -> (number: String, unit: String) {
+        (decimalFormatter.string(from: NSNumber(value: max(0, watts))) ?? "\(watts)", "W")
+    }
+
+    static func watts(_ watts: Double) -> String {
+        let parts = wattsParts(watts)
+        return "\(parts.number) \(parts.unit)"
+    }
+
+    /// "2.400" (rpm, com separador de milhar do idioma).
+    static func rpm(_ value: Double) -> String {
+        integerFormatter.string(from: NSNumber(value: (value / 10).rounded() * 10)) ?? "\(Int(value))"
     }
 
     /// "1h 20min" (minutos do IOKit).
