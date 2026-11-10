@@ -88,8 +88,55 @@ class BoringNotchXPCHelper: NSObject, BoringNotchXPCHelperProtocol {
     }
 
     @objc func requestAccessibilityAuthorization() {
+        if !AXIsProcessTrusted() {
+            Self.resetStaleAccessibilityEntryOnce()
+        }
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
+    }
+
+    // MARK: - Permissão presa a outra assinatura (boringCode)
+
+    private static let staleEntryLock = NSLock()
+    nonisolated(unsafe) private static var didResetStaleEntry = false  // protegido pelo lock
+
+    /// O macOS guarda a Acessibilidade junto com a assinatura do app (o "code requirement").
+    /// Quando a assinatura muda (atualização assinada com outro certificado, build de dev ↔ versão
+    /// distribuída), a chave continua ligada nos Ajustes, mas não vale mais para o app novo: pedir
+    /// de novo não mostra nada e ligar/desligar não resolve. Apagar a linha antiga faz o pedido
+    /// criar uma nova, já com a assinatura atual. Só acontece quando o app NÃO tem a permissão, e
+    /// uma vez por execução (para não apagar uma permissão que você acabou de dar).
+    ///
+    /// A permissão do helper é registrada no app que o contém (`com.reesoousa.boringcode`), por
+    /// isso o reset vai para o ID do app. Quem apaga é o `tccutil` do sistema: um app comum não
+    /// tem o privilégio de mexer no banco de permissões.
+    private static func resetStaleAccessibilityEntryOnce() {
+        staleEntryLock.lock()
+        defer { staleEntryLock.unlock() }
+        guard !didResetStaleEntry, let bundleID = containingAppBundleIdentifier else { return }
+        didResetStaleEntry = true
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", "Accessibility", bundleID]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            NSLog("boringCode: tccutil reset falhou: \(error.localizedDescription)")
+        }
+    }
+
+    /// `boringCode.app/Contents/XPCServices/BoringNotchXPCHelper.xpc` → ID do boringCode.app.
+    private static var containingAppBundleIdentifier: String? {
+        let appURL = Bundle.main.bundleURL
+            .deletingLastPathComponent()  // XPCServices
+            .deletingLastPathComponent()  // Contents
+            .deletingLastPathComponent()  // boringCode.app
+        guard appURL.pathExtension == "app" else { return nil }
+        return Bundle(url: appURL)?.bundleIdentifier
     }
 
     @objc func ensureAccessibilityAuthorization(_ promptIfNeeded: Bool, with reply: @escaping (Bool) -> Void) {
