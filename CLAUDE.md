@@ -80,12 +80,17 @@ xcodebuild -project boringNotch.xcodeproj -scheme boringNotch -derivedDataPath b
 - **Nunca abrir o app de dentro de `build.noindex/`** nem copiar à mão: só existe uma cópia,
   `/Applications/boringCode.app`. O sufixo `.noindex` esconde os builds do Spotlight/Finder e o
   script tira-os do registro de apps (antes apareciam 3 "boringCode" no Finder).
-- **Assinatura de dev estável:** `install-dev.sh` re-assina tudo com o certificado local
-  `boringCode Dev` (criado uma vez por `scripts/setup-dev-signing.sh` no chaveiro de login,
-  autoassinado, só desta máquina). Ad-hoc (`-`) muda de identidade a cada build e o macOS
-  pedia Acessibilidade/Automação de novo; com o certificado a identidade é
-  `identifier "com.reesoousa.boringcode" and certificate leaf = H"…"` e as permissões ficam.
+- **Assinatura de dev estável:** `install-dev.sh` re-assina tudo com o **"Apple Development"** do chaveiro, o mesmo
+  das versões publicadas (`make-dmg.sh`). Ad-hoc (`-`) muda de identidade a cada build e o macOS pedia
+  Acessibilidade/Automação de novo. E o certificado tem que ser o MESMO do Sparkle: o macOS guarda cada permissão com
+  a assinatura (em 2026-11-10 o build de dev com o `boringCode Dev` e a 1.0 do Sparkle brigaram — a Acessibilidade
+  ficou ligada nos Ajustes mas não valia: "Failed to match existing code requirement" no log do `tccd`). Sem
+  "Apple Development" na máquina, cai no `boringCode Dev` local (`scripts/setup-dev-signing.sh`, autoassinado).
   O projeto Xcode continua ad-hoc (a re-assinatura é só no script).
+- **Permissão presa a outra assinatura:** quando o helper pede Acessibilidade e não a tem, apaga antes a linha velha
+  (`tccutil reset Accessibility com.reesoousa.boringcode`, uma vez por execução) para o pedido criar uma nova. A
+  permissão do helper XPC é registrada no ID do **app** (o `tccd` atribui ao app que o contém). Diagnóstico:
+  `log show --last 1h --info --predicate 'process == "tccd" AND eventMessage CONTAINS "Failed to match"'`.
 - Rodar junto com o Boring Notch de `/Applications` funciona, mas os dois desenham no notch —
   feche o instalado para testar visualmente.
 - Projeto Xcode: ad-hoc (`CODE_SIGN_IDENTITY[sdk=macosx*] = "-"`), sem Team.
